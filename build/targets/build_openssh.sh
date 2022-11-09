@@ -49,9 +49,9 @@ main() {
     echo "[+] Finished building OpenSSH ${CURRENT_ARCH}"
 
     OPENSSH_VERSION=$(echo $OPENSSH_VERSION | sed 's/-//')
-    echo "PACKAGED_NAME=\"${OPENSSH_VERSION}\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=\"/output/*\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=\"${version_number}\"" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME=${OPENSSH_VERSION}" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME_PATH=/output/*" >> $GITHUB_OUTPUT
+    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
 }
 
 main

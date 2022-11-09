@@ -52,9 +52,9 @@ main() {
     cp "${BUILD_DIRECTORY}/gdb_build/gdbserver/gdbserver" "${OUTPUT_DIRECTORY}/gdbserver${GDBSERVER_VERSION}"
     echo "[+] Finished building GDB ${CURRENT_ARCH}"
 
-    echo "PACKAGED_NAME=\"gdb${GDB_VERSION}\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=\"/output/*\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=\"${version_number}\"" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME=gdb${GDB_VERSION}" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME_PATH=/output/*" >> $GITHUB_OUTPUT
+    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
 }
 
 main

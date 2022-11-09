@@ -39,9 +39,9 @@ main() {
     cp "${BUILD_DIRECTORY}/tcpdump/tcpdump" "${OUTPUT_DIRECTORY}/tcpdump${version}"
     echo "[+] Finished building tcpdump ${CURRENT_ARCH}"
 
-    echo "PACKAGED_NAME=\"tcpdump${version}\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=\"${OUTPUT_DIRECTORY}/*\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=\"${version_number}\"" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME=tcpdump${version}" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME_PATH=${OUTPUT_DIRECTORY}/*" >> $GITHUB_OUTPUT
+    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
 }
 
 main

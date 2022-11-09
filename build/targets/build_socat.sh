@@ -41,9 +41,9 @@ main() {
     cp "${BUILD_DIRECTORY}/socat/socat" "${OUTPUT_DIRECTORY}/socat${version}"
     echo "[+] Finished building socat ${CURRENT_ARCH}"
 
-    echo "PACKAGED_NAME=\"socat${version}\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=\"${OUTPUT_DIRECTORY}/*\"" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=\"${version_number}\"" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME=socat${version}" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME_PATH=${OUTPUT_DIRECTORY}/*" >> $GITHUB_OUTPUT
+    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
 }
 
 main
