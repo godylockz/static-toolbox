@@ -142,16 +142,16 @@ jobs:
             git fetch --quiet --prune --unshallow --tags
             if [[ $(git tag -l | grep socat-v${{ needs.build-x86.outputs.version }} | wc -l) -gt 0 ]]; then
               echo "Tag for socat-v${{ needs.build-x86.outputs.version }} already exists. Skipping release creation."
-              echo "NEW_RELEASE=false" >> $GITHUB_OUTPUT
+              echo "new_release='false'" >> $GITHUB_OUTPUT
             else
               git tag "socat-v${{ needs.build-x86.outputs.version }}"
               git push origin "socat-v${{ needs.build-x86.outputs.version }}"
-              echo "NEW_RELEASE=true" >> $GITHUB_OUTPUT
+              echo "new_release='true'" >> $GITHUB_OUTPUT
             fi
 
         - name: Create Release
           uses: ncipollo/release-action@v1
-          if: ${{ steps.tag_release.outputs.NEW_RELEASE }}
+          if: ${{ steps.tag_release.outputs.new_release != 'false' }}
           with:
             name: socat-v${{ needs.build-x86.outputs.version }}
             tag: socat-v${{ needs.build-x86.outputs.version }}
