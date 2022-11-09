@@ -28,7 +28,7 @@ build_tcpreplay() {
     fetch "https://github.com/appneta/tcpreplay.git" "${BUILD_DIRECTORY}/tcpdump" git
     cd "${BUILD_DIRECTORY}/tcpreplay"
     git clean -fdx
-    git checkout v4.3.3
+    #git checkout v4.3.3
     export LIBPCAP_PATH="${BUILD_DIRECTORY}/libpcap"
     ./autogen.sh
     CFLAGS="${GCC_OPTS} -I${LIBPCAP_PATH} -L${LIBPCAP_PATH}" \

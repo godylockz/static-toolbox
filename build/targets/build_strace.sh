@@ -14,7 +14,7 @@ build_strace() {
     fetch "https://github.com/strace/strace" "${BUILD_DIRECTORY}/strace" git
     cd "${BUILD_DIRECTORY}/strace"
     git clean -fdx
-    git checkout v5.7
+    #git checkout v5.7
     ./bootstrap
     CMD="CFLAGS=\"${GCC_OPTS}\" "
     CMD+="CXXFLAGS=\"${GXX_OPTS}\" "

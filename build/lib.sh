@@ -254,7 +254,7 @@ lib_build_ncurses(){
     fetch "$GIT_NCURSES" "${BUILD_DIRECTORY}/ncurses" git
     cd "${BUILD_DIRECTORY}/ncurses" || { echo "Cannot cd to ${BUILD_DIRECTORY}/ncurses"; exit 1; }
     git clean -fdx
-    git checkout v6_2
+    #git checkout v6_2
 
     CMD="CFLAGS=\"${GCC_OPTS}\" "
     CMD+="CXXFLAGS=\"${GXX_OPTS}\" "
@@ -271,7 +271,7 @@ lib_build_libpcap(){
     fetch "$GIT_LIBPCAP" "${BUILD_DIRECTORY}/libpcap" git
     cd "${BUILD_DIRECTORY}/libpcap" || { echo "Cannot cd to ${BUILD_DIRECTORY}/libpcap"; exit 1; }
     git clean -fdx
-    git checkout libpcap-1.9.1
+    #git checkout libpcap-1.9.1
     CFLAGS="${GCC_OPTS}" \
         CXXFLAGS="${GXX_OPTS}" \
         ./configure \
