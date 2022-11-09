@@ -110,7 +110,8 @@ jobs:
         - name: Tag Release
           run: |
             set +e
-            if git rev-list "tcpdump-v${{ needs.build-x86.outputs.version }}".. >/dev/null;then
+            git fetch --quiet --prune --unshallow --tags
+            if [[ $(git tag -l | grep tcpdump-v${{ needs.build-x86.outputs.version }} | wc -l) -gt 0 ]]; then
               echo "Tag for tcpdump-v${{ needs.build-x86.outputs.version }} already exists. Skipping release creation."
               echo "NEW_RELEASE=false" >> $GITHUB_OUTPUT
             else
