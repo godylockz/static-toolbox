@@ -114,16 +114,16 @@ jobs:
             git fetch --quiet --prune --unshallow --tags
             if [[ $(git tag -l | grep openssh-v${{ needs.build-x86.outputs.version }} | wc -l) -gt 0 ]]; then
               echo "Tag for openssh-v${{ needs.build-x86.outputs.version }} already exists. Skipping release creation."
-              echo "new_release=false" >> $GITHUB_OUTPUT
+              echo "new_release=false" >> GITHUB_ENV
             else
               git tag "openssh-v${{ needs.build-x86.outputs.version }}"
               git push origin "openssh-v${{ needs.build-x86.outputs.version }}"
-              echo "new_release=true" >> $GITHUB_OUTPUT
+              echo "new_release=true" >> GITHUB_ENV
             fi
 
         - name: Create Release
           uses: ncipollo/release-action@v1
-          if: ${{ steps.tag_release.outputs.new_release == 'true' }}
+          if: ${{ env.new_release }}
           with:
             name: openssh-v${{ needs.build-x86.outputs.version }}
             tag: openssh-v${{ needs.build-x86.outputs.version }}
