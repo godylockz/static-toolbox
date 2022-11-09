@@ -28,4 +28,5 @@ The following table shows the building status for the current toolset. The follo
 |[socat](https://github.com/godylockz/static-toolbox/actions?query=workflow%3A%22socat%22)|![socat](https://github.com/godylockz/static-toolbox/workflows/socat/badge.svg)|
 |[GDB & gdbserver](https://github.com/godylockz/static-toolbox/actions?query=workflow%3AGDB)|![GDB & gdbserver](https://github.com/godylockz/static-toolbox/workflows/GDB%20&%20gdbserver/badge.svg)|
 |[tcpdump](https://github.com/godylockz/static-toolbox/actions?query=workflow%3A%22tcpdump%22)|![tcpdump](https://github.com/godylockz/static-toolbox/workflows/tcpdump/badge.svg)|
+|[tcpreplay](https://github.com/godylockz/static-toolbox/actions?query=workflow%3A%22tcpdump%22)|![tcpreplay](https://github.com/godylockz/static-toolbox/workflows/tcpreplay/badge.svg)|
 
