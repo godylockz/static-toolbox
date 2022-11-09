@@ -123,7 +123,7 @@ jobs:
 
         - name: Create Release
           uses: ncipollo/release-action@v1
-          if: ${{ steps.tag_release.outputs.NEW_RELEASE == 'true' }}
+          if: ${{ steps.tag_release.outputs.NEW_RELEASE }}
           with:
             name: openssh-v${{ needs.build-x86.outputs.version }}
             tag: openssh-v${{ needs.build-x86.outputs.version }}
