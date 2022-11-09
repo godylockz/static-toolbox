@@ -149,16 +149,16 @@ jobs:
           git fetch --quiet --prune --unshallow --tags
           if [[ $(git tag -l | grep gdb-v${{ needs.build-x86.outputs.version }} | wc -l) -gt 0 ]]; then
             echo "Tag for gdb-v${{ needs.build-x86.outputs.version }} already exists. Skipping release creation."
-            echo "new_release='false'" >> $GITHUB_OUTPUT
+            echo "new_release=false" >> $GITHUB_OUTPUT
           else
             git tag "gdb-v${{ needs.build-x86.outputs.version }}"
             git push origin "gdb-v${{ needs.build-x86.outputs.version }}"
-            echo "new_release='true'" >> $GITHUB_OUTPUT
+            echo "new_release=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Release
         uses: ncipollo/release-action@v1
-        if: ${{ steps.tag_release.outputs.new_release != 'false' }}
+        if: ${{ steps.tag_release.outputs.new_release == 'true' }}
         with:
           name: gdb-v${{ needs.build-x86.outputs.version }}
           tag: gdb-v${{ needs.build-x86.outputs.version }}
