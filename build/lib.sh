@@ -1,8 +1,8 @@
 #!/bin/bash
-GIT_OPENSSL="https://github.com/drwetter/openssl-pm-snapshot.git"
+GIT_OPENSSL="https://github.com/openssl/openssl.git"
 GIT_BINUTILS_GDB="https://github.com/bminor/binutils-gdb.git"
 GIT_READLINE="https://git.savannah.gnu.org/git/readline.git"
-GIT_NCURSES="https://github.com/ThomasDickey/ncurses-snapshots.git"
+GIT_NCURSES="https://github.com/mirror/ncurses.git"
 GIT_LIBPCAP="https://github.com/the-tcpdump-group/libpcap.git"
 
 BUILD_DIRECTORY="/build"
