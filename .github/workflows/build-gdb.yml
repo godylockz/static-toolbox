@@ -29,7 +29,7 @@ jobs:
           $GITHUB_WORKSPACE/build/targets/build_gdb.sh x86
         
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
             name: ${{ steps.build_gdb.outputs.PACKAGED_NAME }}
             path: ${{ steps.build_gdb.outputs.PACKAGED_NAME_PATH }}
@@ -54,7 +54,7 @@ jobs:
           $GITHUB_WORKSPACE/build/targets/build_gdb.sh x86_64
         
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
             name: ${{ steps.build_gdb.outputs.PACKAGED_NAME }}
             path: ${{ steps.build_gdb.outputs.PACKAGED_NAME_PATH }}
@@ -84,7 +84,7 @@ jobs:
           $GITHUB_WORKSPACE/build/targets/build_gdb.sh armhf
         
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
             name: ${{ steps.build_gdb.outputs.PACKAGED_NAME }}
             path: ${{ steps.build_gdb.outputs.PACKAGED_NAME_PATH }}
@@ -118,7 +118,7 @@ jobs:
           $GITHUB_WORKSPACE/build/targets/build_gdb.sh aarch64
         
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
             name: ${{ steps.build_gdb.outputs.PACKAGED_NAME }}
             path: ${{ steps.build_gdb.outputs.PACKAGED_NAME_PATH }}
