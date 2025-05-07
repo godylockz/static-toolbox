@@ -8,6 +8,14 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    - name: Install SVN using Chocolatey
+      run: |
+        choco install svn --yes
+
+    - name: Checkout nmap-mswin32-aux via SVN
+      run: |
+        svn checkout https://svn.nmap.org/nmap-mswin32-aux
+
     - name: Set up Git repository
       run: |
         git clone https://github.com/winezer0/nmap.git nmap
