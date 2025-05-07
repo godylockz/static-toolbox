@@ -14,30 +14,36 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Set up Git repository
+    - name: Checkout Repository
       run: |
         git clone https://github.com/winezer0/nmap.git nmap
 
-    - name: Check if nmap was cloned correctly
+    - name: Install Visual Studio 2019 Build Tools
+      shell: powershell
       run: |
-        cd nmap
-        dir
-      working-directory: ${{ github.workspace }}
-
-    - name: Navigate to mswin32 directory and list files
-      run: |
-        cd nmap\mswin32
-        dir
-      working-directory: ${{ github.workspace }}
+        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.MSBuildTools --add Microsoft.VisualStudio.Workload.VCTools" -y
 
     - name: Setup MSBuild (VS2019)
       uses: microsoft/setup-msbuild@v1.0.2
 
-    - name: Execute Build.bat using MSBuild via VS2019
+    - name: Check Visual Studio Installation
+      shell: cmd
       run: |
-        Build.bat build Release
+        where msbuild
+        echo %VSINSTALLDIR%
+        echo %PATH%
+
+    - name: Navigate to mswin32 directory
+      working-directory: ${{ github.workspace }}\nmap\mswin32
+      run: |
+        dir
+
+    - name: Run Build.bat using correct environment
       working-directory: ${{ github.workspace }}\nmap\mswin32
       shell: cmd
+      run: |
+        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x86
+        Build.bat build Release
 
     - name: Archive the Release output
       uses: actions/upload-artifact@v4
