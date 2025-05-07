@@ -30,12 +30,10 @@ jobs:
         dir
       working-directory: ${{ github.workspace }}
 
-    - name: Setup MSVC environment for VS2019
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: x86
+    - name: Setup MSBuild (VS2019)
+      uses: microsoft/setup-msbuild@v1.0.2
 
-    - name: Execute Build.bat
+    - name: Execute Build.bat using MSBuild via VS2019
       run: |
         Build.bat build Release
       working-directory: ${{ github.workspace }}\nmap\mswin32
