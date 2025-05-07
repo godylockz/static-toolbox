@@ -26,7 +26,7 @@ jobs:
 
     - name: Navigate to mswin32 directory and list files
       run: |
-        cd nmap\nmap\mswin32
+        cd nmap\mswin32
         dir
       working-directory: ${{ github.workspace }}
 
@@ -38,11 +38,11 @@ jobs:
     - name: Execute Build.bat
       run: |
         Build.bat build Release
-      working-directory: ${{ github.workspace }}\nmap\nmap\mswin32
+      working-directory: ${{ github.workspace }}\nmap\mswin32
       shell: cmd
 
     - name: Archive the Release output
       uses: actions/upload-artifact@v4
       with:
         name: nmap-release-output
-        path: ${{ github.workspace }}\nmap\nmap\mswin32\Release
+        path: ${{ github.workspace }}\nmap\mswin32\Release
