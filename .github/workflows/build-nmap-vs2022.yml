@@ -1,13 +1,7 @@
 name: Build Nmap on Windows with VS2022
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
-  workflow_dispatch:
+  workflow_dispatch
 
 jobs:
   build:
