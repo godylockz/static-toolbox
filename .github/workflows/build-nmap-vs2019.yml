@@ -1,0 +1,45 @@
+name: Build Nmap on Windows with VS2019
+
+on:
+  workflow_dispatch
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repository
+      run: |
+        git clone https://github.com/winezer0/nmap.git nmap
+
+    - name: Install Visual Studio 2019 Build Tools
+      shell: powershell
+      run: |
+        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.MSBuildTools --add Microsoft.VisualStudio.Workload.VCTools" -y
+
+    - name: Setup MSBuild (VS2019)
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Check Visual Studio Installation
+      shell: cmd
+      run: |
+        where msbuild
+        echo %VSINSTALLDIR%
+        echo %PATH%
+
+    - name: Navigate to mswin32 directory
+      working-directory: ${{ github.workspace }}\nmap\mswin32
+      run: |
+        dir
+
+    - name: Run Build.bat using correct environment
+      working-directory: ${{ github.workspace }}\nmap\mswin32
+      shell: cmd
+      run: |
+        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x86
+        Build.bat build Release
+
+    - name: Archive the Release output
+      uses: actions/upload-artifact@v4
+      with:
+        name: nmap-release-output
+        path: ${{ github.workspace }}\nmap\mswin32\Release
