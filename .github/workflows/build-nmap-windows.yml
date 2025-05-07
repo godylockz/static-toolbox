@@ -18,21 +18,27 @@ jobs:
       run: |
         git clone https://github.com/winezer0/nmap.git nmap
 
+    - name: Check if nmap was cloned correctly
+      run: |
+        cd nmap
+        dir
+      working-directory: ${{ github.workspace }}
+
+    - name: Navigate to mswin32 directory and list files
+      run: |
+        cd nmap\nmap\mswin32
+        dir
+      working-directory: ${{ github.workspace }}
+
     - name: Setup MSVC environment for VS2019
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: x86
 
-    - name: Check folder structure
+    - name: Execute Build.bat
       run: |
-        cd /d "%GITHUB_WORKSPACE%\nmap\nmap\mswin32"
-        dir
-      shell: cmd
-
-    - name: Build project
-      run: |
-        cd /d "%GITHUB_WORKSPACE%\nmap\nmap\mswin32"
         Build.bat build Release
+      working-directory: ${{ github.workspace }}\nmap\nmap\mswin32
       shell: cmd
 
     - name: Archive the Release output
