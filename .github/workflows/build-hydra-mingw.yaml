@@ -12,17 +12,24 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      # 2. 安装 MSYS2 + MinGW-w64（推荐方式）
+      # 2. 下载并安装 MSYS2（修复下载链接和验证文件）
       - name: Install MSYS2 and MinGW-w64
         run: |
-          # 下载 MSYS2 安装脚本
-          curl -o msys2-installer.exe https://sourceforge.net/projects/msys2/files/base-installer/msys2-base-x86_64-latest.exe/download
-          
+          # 下载 MSYS2 安装器（使用直接链接，避免 SourceForge 重定向）
+          curl -L -o msys2-installer.exe https://github.com/msys2/msys2-installer/releases/latest/download/msys2-x86_64.exe
+
+          # 验证文件大小（确保文件未损坏）
+          $fileSize = (Get-Item .\msys2-installer.exe).Length
+          if ($fileSize -lt 10MB) {
+            Write-Error "Downloaded file is too small (expected ~100MB, got $fileSize bytes)"
+            exit 1
+          }
+
           # 创建安装目录
           mkdir msys2
           cd msys2
-          
-          # 运行安装脚本（静默安装）
+
+          # 运行安装程序（静默安装）
           ..\msys2-installer.exe /VERYSILENT /DIR=C:\msys64
 
           # 更新 MSYS2 包列表
@@ -40,13 +47,7 @@ jobs:
           echo "::add-path::C:\\msys64\\mingw64\\bin"
           echo "::add-path::C:\\msys64\\usr\\bin"
 
-      # 4. 下载依赖库（libpcre2、libssl、libz）
-      - name: Download dependencies
-        run: |
-          # 使用 MSYS2 安装依赖库（已通过 pacman 安装）
-          echo "Dependencies are already installed via pacman."
-
-      # 5. 编译 Hydra
+      # 4. 编译 Hydra
       - name: Build Hydra
         run: |
           # 克隆 Hydra 源码
@@ -66,14 +67,14 @@ jobs:
           cp src/hydra.exe C:/hydra-win64/
           cp README.md LICENSE docs/* C:/hydra-win64/
 
-      # 6. 打包结果
+      # 5. 打包结果
       - name: Package Hydra
         run: |
           # 打包为 ZIP
           cd C:/
           7z a hydra-win64.zip hydra-win64/
 
-      # 7. 上传构建产物
+      # 6. 上传构建产物
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
