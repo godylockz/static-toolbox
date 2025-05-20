@@ -43,7 +43,7 @@ jobs:
           cp README.md LICENSE docs/* ../../../
 
       # 6. 调试：列出当前目录内容
-      - name: Debug: List files
+      - name: Debug List files
         run: |
           ls -la
           ls -la hydra-source/
