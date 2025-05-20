@@ -1,0 +1,71 @@
+name: Build Hydra for Windows (MinGW)
+
+on:
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # 1. 检出源码
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # 2. 安装 MSYS2 和 MinGW-w64 环境
+      - name: Setup MSYS2 & MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64  # 使用 64 位 MinGW
+          update: true       # 自动更新系统
+
+      # 3. 安装依赖包
+      - name: Install dependencies
+        shell: msys2 {0}
+        run: |
+          pacman --noconfirm -S mingw-w64-x86_64-gcc mingw-w64-x86_64-pcre \
+            mingw-w64-x86_64-openssl mingw-w64-x86_64-zlib make git
+
+      # 4. 克隆 Hydra 最新主分支源码
+      - name: Clone Hydra source from main branch
+        shell: msys2 {0}
+        run: |
+          git clone https://github.com/vanhauser-thc/thc-hydra.git hydra-source
+
+      # 5. 编译 Hydra（在 MSYS2 环境中）
+      - name: Configure and Build Hydra
+        shell: msys2 {0}
+        working-directory: ./hydra-source
+        run: |
+          CC=x86_64-w64-mingw32-gcc ./configure --disable-x11 --with-ssl --prefix=/usr/local
+          make -j$(nproc)
+          cp src/hydra.exe ../../../
+          cp README.md LICENSE docs/* ../../../
+
+      # 6. 调试：列出当前目录内容
+      - name: Debug: List files
+        run: |
+          ls -la
+          ls -la hydra-source/
+
+      # 7. 打包二进制文件
+      - name: Package binaries
+        run: |
+          mkdir -p hydra-win64
+          cp hydra.exe README.md LICENSE docs/* hydra-win64/
+          zip -r hydra-win64.zip hydra-win64
+
+      # 8. 上传构建产物（使用 v4）
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hydra-win64
+          path: hydra-win64.zip
+
+      # 9. 创建 GitHub Release（可选）
+      - name: Create GitHub Release (Optional)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: hydra-win64.zip
