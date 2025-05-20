@@ -19,12 +19,13 @@ jobs:
           msystem: MINGW64  # 使用 64 位 MinGW
           update: true       # 自动更新系统
 
-      # 3. 安装依赖包
+      # 3. 安装依赖包（包括缺失的 MSYS2 头文件）
       - name: Install dependencies
         shell: msys2 {0}
         run: |
           pacman --noconfirm -S mingw-w64-x86_64-gcc mingw-w64-x86_64-pcre \
-            mingw-w64-x86_64-openssl mingw-w64-x86_64-zlib make git
+            mingw-w64-x86_64-openssl mingw-w64-x86_64-zlib make git \
+            msys2-headers  # 安装缺失的头文件（包括 arpa/inet.h）
 
       # 4. 克隆 Hydra 最新主分支源码
       - name: Clone Hydra source from main branch
