@@ -12,60 +12,39 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      # 2. 下载并安装 MinGW-w64
-      - name: Install MinGW-w64
+      # 2. 安装 MSYS2 + MinGW-w64（推荐方式）
+      - name: Install MSYS2 and MinGW-w64
         run: |
-          # 下载 MinGW-w64 安装脚本（确保链接正确）
-          curl -o mingw-get.exe https://sourceforge.net/projects/mingw-w64/files/latest/download?source=files
+          # 下载 MSYS2 安装脚本
+          curl -o msys2-installer.exe https://sourceforge.net/projects/msys2/files/base-installer/msys2-base-x86_64-latest.exe/download
           
           # 创建安装目录
-          mkdir mingw
-          cd mingw
+          mkdir msys2
+          cd msys2
           
-          # 将 mingw-get.exe 复制到当前目录
-          move ..\mingw-get.exe .
-          
-          # 运行 mingw-get 安装依赖（无需解压）
-          .\mingw-get install mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-pkg-config mingw-w64-x86_64-zlib mingw-w64-x86_64-openssl mingw-w64-x86_64-pcre2
-          
+          # 运行安装脚本（静默安装）
+          ..\msys2-installer.exe /VERYSILENT /DIR=C:\msys64
+
+          # 更新 MSYS2 包列表
+          C:\msys64\usr\bin\bash.exe -c "pacman -Syu --noconfirm"
+
+          # 安装 MinGW-w64 工具链
+          C:\msys64\usr\bin\bash.exe -c "pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pcre2"
+
           # 返回根目录
           cd ..
 
-      # 3. 设置 MinGW 环境变量
-      - name: Set MinGW Path
+      # 3. 设置 MSYS2 环境变量
+      - name: Set MSYS2 Path
         run: |
-          echo "::add-path::C:\\mingw\\mingw64\\bin"
-          echo "::add-path::C:\\mingw\\msys\\1.0\\bin"
+          echo "::add-path::C:\\msys64\\mingw64\\bin"
+          echo "::add-path::C:\\msys64\\usr\\bin"
 
       # 4. 下载依赖库（libpcre2、libssl、libz）
       - name: Download dependencies
         run: |
-          # 下载 libpcre2
-          curl -o pcre2-10.42.zip https://github.com/PCRE2Project/pcre2/releases/download/release-10.42/pcre2-10.42.zip
-          unzip pcre2-10.42.zip -d pcre2
-          cd pcre2
-          ./configure --host=x86_64-w64-mingw32 --prefix=C:/mingw/mingw64
-          make -j$(nproc)
-          make install
-          cd ..
-
-          # 下载 OpenSSL
-          curl -o openssl-3.3.1.tar.gz https://www.openssl.org/source/openssl-3.3.1.tar.gz
-          tar -xzf openssl-3.3.1.tar.gz
-          cd openssl-3.3.1
-          ./Configure mingw64 -prefix=C:/mingw/mingw64
-          make -j$(nproc)
-          make install
-          cd ..
-
-          # 下载 zlib
-          curl -o zlib-1.3.tar.gz https://zlib.net/zlib-1.3.tar.gz
-          tar -xzf zlib-1.3.tar.gz
-          cd zlib-1.3
-          ./configure --prefix=C:/mingw/mingw64
-          make -j$(nproc)
-          make install
-          cd ..
+          # 使用 MSYS2 安装依赖库（已通过 pacman 安装）
+          echo "Dependencies are already installed via pacman."
 
       # 5. 编译 Hydra
       - name: Build Hydra
@@ -75,7 +54,7 @@ jobs:
           cd hydra-source
 
           # 配置编译参数
-          ./configure --host=x86_64-w64-mingw32 --prefix=C:/mingw/mingw64 --with-ssl=C:/mingw/mingw64 --disable-x11
+          ./configure --host=x86_64-w64-mingw32 --prefix=C:/msys64/mingw64 --with-ssl=C:/msys64/mingw64 --disable-x11
 
           # 编译 Hydra
           make -j$(nproc)
