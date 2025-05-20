@@ -13,40 +13,11 @@ jobs:
         uses: actions/checkout@v4
 
       # 2. 下载并安装 MSYS2（修复下载链接和验证文件）
-      - name: Install MSYS2 and MinGW-w64
-        run: |
-          # 下载 MSYS2 安装器（使用直接链接，避免 SourceForge 重定向）
-          curl -L -o msys2-installer.exe https://github.com/msys2/msys2-installer/releases/download/2025-02-21/msys2-x86_64-20250221.exe
-
-          # 验证文件大小（确保文件未损坏）
-          $fileSize = (Get-Item .\msys2-installer.exe).Length
-          if ($fileSize -lt 10MB) {
-            Write-Error "Downloaded file is too small (expected ~100MB, got $fileSize bytes)"
-            exit 1
-          }
-
-          # 创建安装目录
-          mkdir msys2
-          cd msys2
-
-          # 运行安装程序（静默安装）
-          ..\msys2-installer.exe /VERYSILENT /DIR=C:\msys64
-
-          # 更新 MSYS2 包列表
-          C:\msys64\usr\bin\bash.exe -c "pacman -Syu --noconfirm"
-
-          # 安装 MinGW-w64 工具链
-          C:\msys64\usr\bin\bash.exe -c "pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pcre2"
-
-          # 返回根目录
-          cd ..
-
-      # 3. 设置 MSYS2 环境变量
-      - name: Set MSYS2 Path
-        run: |
-          echo "::add-path::C:\\msys64\\mingw64\\bin"
-          echo "::add-path::C:\\msys64\\usr\\bin"
-
+      - name: Set up MinGW
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+          
       # 4. 编译 Hydra
       - name: Build Hydra
         run: |
