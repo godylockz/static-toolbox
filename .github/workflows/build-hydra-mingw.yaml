@@ -16,7 +16,7 @@ jobs:
       - name: Install MSYS2 and MinGW-w64
         run: |
           # 下载 MSYS2 安装器（使用直接链接，避免 SourceForge 重定向）
-          curl -L -o msys2-installer.exe https://github.com/msys2/msys2-installer/releases/latest/download/msys2-x86_64.exe
+          curl -L -o msys2-installer.exe https://github.com/msys2/msys2-installer/releases/download/2025-02-21/msys2-x86_64-20250221.exe
 
           # 验证文件大小（确保文件未损坏）
           $fileSize = (Get-Item .\msys2-installer.exe).Length
