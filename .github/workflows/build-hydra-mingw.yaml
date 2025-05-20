@@ -1,7 +1,7 @@
 name: Build Hydra for Windows (MinGW)
 
 on:
-  workflow_dispatch: # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,14 +12,23 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      # 2. 安装 MinGW-w64 工具链
+      # 2. 下载并安装 MinGW-w64
       - name: Install MinGW-w64
         run: |
-          # 下载并安装 MinGW-w64（x86_64 架构）
-          curl -o mingw-get.exe https://sourceforge.net/projects/mingw-w64/files/mingw-w64/mingw-w64-release/mingw-get-0.7.2-mingw32-beta-20230324-1.1.0.tar.gz/download
-          7z x mingw-get.exe -Omingw
+          # 下载 MinGW-w64 安装脚本（确保链接正确）
+          curl -o mingw-get.exe https://sourceforge.net/projects/mingw-w64/files/latest/download?source=files
+          
+          # 创建安装目录
+          mkdir mingw
           cd mingw
+          
+          # 将 mingw-get.exe 复制到当前目录
+          move ..\mingw-get.exe .
+          
+          # 运行 mingw-get 安装依赖（无需解压）
           .\mingw-get install mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-pkg-config mingw-w64-x86_64-zlib mingw-w64-x86_64-openssl mingw-w64-x86_64-pcre2
+          
+          # 返回根目录
           cd ..
 
       # 3. 设置 MinGW 环境变量
