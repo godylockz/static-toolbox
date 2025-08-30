@@ -30,3 +30,4 @@ The following table shows the building status for the current toolset. The follo
 |[tcpdump](https://github.com/godylockz/static-toolbox/actions?query=workflow%3A%22tcpdump%22)|![tcpdump](https://github.com/godylockz/static-toolbox/workflows/tcpdump/badge.svg)|
 |[tcpreplay](https://github.com/godylockz/static-toolbox/actions?query=workflow%3A%22tcpreplay%22)|![tcpreplay](https://github.com/godylockz/static-toolbox/workflows/tcpreplay/badge.svg)|
 |[strace](https://github.com/godylockz/static-toolbox/actions?query=workflow%3A%22strace%22)|![strace](https://github.com/godylockz/static-toolbox/workflows/strace/badge.svg)|
+

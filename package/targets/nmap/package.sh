@@ -54,7 +54,7 @@ TARBALL="nmap-${version}-${arch}-portable.tar.gz"
 tar czf "${output}/${TARBALL}" -C "$tmp_dir" .
 cp "${output}/${TARBALL}" /packaged
 echo "PACKAGED_TARBALL=${TARBALL}" >> $GITHUB_OUTPUT
-echo "PACKAGED_TARBALL_PATH=/packaged/${TARBALL}" >> $GITHUB_OUTPUT
+echo "PACKAGED_TARBALL_PATH=/packaged/${TARBALL}"  >> $GITHUB_OUTPUT
 
 ZIP="nmap-${version}-${arch}-portable.zip"
 zip -r -q "${output}/${ZIP}" .
