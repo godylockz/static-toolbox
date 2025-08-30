@@ -20,7 +20,21 @@ build_nmap() {
     git clean -fdx || true
     # make sure we only build the static libraries
     sed -i '/build-zlib: $(ZLIBDIR)\/Makefile/!b;n;c\\t@echo Compiling zlib; cd $(ZLIBDIR) && $(MAKE) static;' "${BUILD_DIRECTORY}/nmap/Makefile.in"
-    CC='gcc -static -fPIC' \
+    if [ "$1" = "armhf" ]; then
+       CC='gcc -static -fPIC' \
+        CXX='g++ -static -static-libstdc++ -fPIC' \
+        LD=ld \
+        LDFLAGS="-L/build/openssl -latomic" \
+        ./configure \
+            --host="$(get_host_triple)" \
+            --without-ndiff \
+            --without-zenmap \
+            --without-nmap-update \
+            --without-libssh2 \
+            --with-pcap=linux \
+            --with-openssl="${BUILD_DIRECTORY}/openssl"
+    else
+       CC='gcc -static -fPIC' \
         CXX='g++ -static -static-libstdc++ -fPIC' \
         LD=ld \
         LDFLAGS="-L/build/openssl" \
@@ -32,6 +46,7 @@ build_nmap() {
             --without-libssh2 \
             --with-pcap=linux \
             --with-openssl="${BUILD_DIRECTORY}/openssl"
+    fi
     sed -i -e "s/shared\: /shared\: #/" "${BUILD_DIRECTORY}/nmap/libpcap/Makefile"
     make
     strip nmap ncat/ncat nping/nping
