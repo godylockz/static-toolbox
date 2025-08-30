@@ -10,7 +10,7 @@ jobs:
         version: ${{ steps.build_strace.outputs.PACKAGED_VERSION }}
       steps:
         - name: Checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
 
         - name: Install dependencies
           run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
@@ -42,7 +42,7 @@ jobs:
       container: muslcc/x86_64:x86_64-linux-musl
       steps:
         - name: Checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
 
         - name: Install dependencies
           run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
@@ -66,7 +66,7 @@ jobs:
       container: muslcc/x86_64:arm-linux-musleabihf
       steps:
         - name: Checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
 
         - name: Install dependencies
           run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
@@ -98,7 +98,7 @@ jobs:
         container: muslcc/x86_64:aarch64-linux-musl
         steps:
           - name: Checkout
-            uses: actions/checkout@v2
+            uses: actions/checkout@v3
 
           - name: Install dependencies
             run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
@@ -132,7 +132,7 @@ jobs:
         contents: write
       steps:
         - name: Checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
 
         - name: Prepare Environment
           run: mkdir /tmp/releases
@@ -154,16 +154,16 @@ jobs:
             set +e
             if git rev-list "strace-v${{ needs.build-x86.outputs.version }}" >/dev/null;then
               echo "Tag for strace-v${{ needs.build-x86.outputs.version }} already exists. Skipping release creation."
-              echo "NEW_RELEASE=false" >> $GITHUB_OUTPUT
+              echo "new_release=false" >> $GITHUB_OUTPUT
             else
               git tag "strace-v${{ needs.build-x86.outputs.version }}"
               git push origin "strace-v${{ needs.build-x86.outputs.version }}"
-              echo "NEW_RELEASE=true" >> $GITHUB_OUTPUT
+              echo "new_release=true" >> $GITHUB_OUTPUT
             fi
 
         - name: Create Release
           uses: ncipollo/release-action@v1
-          if: ${{ steps.tag_release.outputs.NEW_RELEASE == 'true' }}
+          if: ${{ env.new_release == 'true' }}
           with:
             name: strace-v${{ needs.build-x86.outputs.version }}
             tag: strace-v${{ needs.build-x86.outputs.version }}
