@@ -53,8 +53,8 @@ build_nmap() {
 }
 
 main() {
-    lib_build_openssl
-    build_nmap
+    lib_build_openssl "$@"
+    build_nmap "$@"
     if [ ! -f "${BUILD_DIRECTORY}/nmap/nmap" -o \
          ! -f "${BUILD_DIRECTORY}/nmap/ncat/ncat" -o \
          ! -f "${BUILD_DIRECTORY}/nmap/nping/nping" ];then
