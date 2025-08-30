@@ -4,7 +4,7 @@ if [ -z "$GITHUB_WORKSPACE" ];then
     exit 1
 fi
 if [ "$#" -ne 1 ];then
-    echo "Usage: ${0} [x86|x86_64|armhf|aarch64]"
+    echo "Usage: ${0} [x86|x86_64|armhf|aarch64|ppc32|ppc64]"
     echo "Example: ${0} x86_64"
     exit 1
 fi
@@ -24,7 +24,8 @@ build_socat() {
         CPPFLAGS="-I${BUILD_DIRECTORY} -I${BUILD_DIRECTORY}/openssl/include -DNETDB_INTERNAL=-1" \
         LDFLAGS="-L${BUILD_DIRECTORY}/readline -L${BUILD_DIRECTORY}/ncurses/lib -L${BUILD_DIRECTORY}/openssl" \
         ./configure \
-            --host="$(get_host_triple)"
+            --host="$(get_host_triple)" \
+            --enable-openssl-method
     make -j4
     strip socat
 }

@@ -17,7 +17,7 @@ init_lib $1
 build_openssh() {
     fetch "https://github.com/openssh/openssh-portable.git" "${BUILD_DIRECTORY}/openssh-portable" git
     cd "${BUILD_DIRECTORY}/openssh-portable"
-    #git checkout V_8_6_P1
+    git checkout V_9_1_P1
     git clean -fdx
     autoreconf -i
     CC="gcc ${GCC_OPTS}" \
@@ -49,9 +49,9 @@ main() {
     echo "[+] Finished building OpenSSH ${CURRENT_ARCH}"
 
     OPENSSH_VERSION=$(echo $OPENSSH_VERSION | sed 's/-//')
-    echo "PACKAGED_NAME=${OPENSSH_VERSION}" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=/output/*" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
+    echo "PACKAGED_NAME=${OPENSSH_VERSION} >> $GITHUB_OUTPUT"
+    echo "PACKAGED_NAME_PATH=/output/* >> $GITHUB_OUTPUT"
+    echo "PACKAGED_VERSION=${version_number} >> $GITHUB_OUTPUT"
 }
 
 main

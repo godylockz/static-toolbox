@@ -10,17 +10,28 @@ jobs:
         version: ${{ steps.build_strace.outputs.PACKAGED_VERSION }}
       steps:
         - name: Checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v2
 
         - name: Install dependencies
           run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
+
+        - name: Install testing dependencies
+          run: apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing yodl
+
+        - name: Install build compiler
+          run: /bin/sh -c "apk update && apk upgrade && apk add --no-cache curl rsync sudo util-linux && cd / && curl -so ${ARCH}-cross.tgz ${HOST}/${ARCH}-cross.tgz && tar -xf ${ARCH}-cross.tgz && rm ${ARCH}-cross.tgz && cd ${ARCH}-cross"
+          env:
+              ARCH: x86_64-linux-musl
+              HOST: http://musl.cc/
+              TEMP: /tmp
+              USER: 0
 
         - name: Build strace
           id: build_strace
           run: $GITHUB_WORKSPACE/build/targets/build_strace.sh x86
 
         - name: Upload artifacts
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.build_strace.outputs.PACKAGED_NAME }}
               path: ${{ steps.build_strace.outputs.PACKAGED_NAME_PATH }}
@@ -31,17 +42,20 @@ jobs:
       container: muslcc/x86_64:x86_64-linux-musl
       steps:
         - name: Checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v2
 
         - name: Install dependencies
           run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
+
+        - name: Install testing dependencies
+          run: apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing yodl
 
         - name: Build strace
           id: build_strace
           run: $GITHUB_WORKSPACE/build/targets/build_strace.sh x86_64
 
         - name: Upload artifacts
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.build_strace.outputs.PACKAGED_NAME }}
               path: ${{ steps.build_strace.outputs.PACKAGED_NAME_PATH }}
@@ -52,77 +66,104 @@ jobs:
       container: muslcc/x86_64:arm-linux-musleabihf
       steps:
         - name: Checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v2
 
         - name: Install dependencies
           run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
+
+        - name: Install testing dependencies
+          run: apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing yodl
+
+        - name: Install build compiler
+          run: /bin/sh -c "apk update && apk upgrade && apk add --no-cache curl rsync sudo util-linux && cd / && curl -so ${ARCH}-cross.tgz ${HOST}/${ARCH}-cross.tgz && tar -xf ${ARCH}-cross.tgz && rm ${ARCH}-cross.tgz && cd ${ARCH}-cross"
+          env:
+              ARCH: x86_64-linux-musl
+              HOST: http://musl.cc/
+              TEMP: /tmp
+              USER: 0
 
         - name: Build strace
           id: build_strace
           run: $GITHUB_WORKSPACE/build/targets/build_strace.sh armhf
 
         - name: Upload artifacts
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.build_strace.outputs.PACKAGED_NAME }}
               path: ${{ steps.build_strace.outputs.PACKAGED_NAME_PATH }}
 
     build-aarch64:
-      name: Build strace AARCH64
-      runs-on: ubuntu-latest
-      container: muslcc/x86_64:aarch64-linux-musl
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v3
+        name: Build strace AARCH64
+        runs-on: ubuntu-latest
+        container: muslcc/x86_64:aarch64-linux-musl
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v2
 
-        - name: Install dependencies
-          run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
+          - name: Install dependencies
+            run: sudo apk update && sudo apk add bash && sudo bash build/install_deps_alpine.sh
 
-        - name: Build strace
-          id: build_strace
-          run: $GITHUB_WORKSPACE/build/targets/build_strace.sh aarch64
+          - name: Install testing dependencies
+            run: apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing yodl
 
-        - name: Upload artifacts
-          uses: actions/upload-artifact@v3
-          with:
-              name: ${{ steps.build_strace.outputs.PACKAGED_NAME }}
-              path: ${{ steps.build_strace.outputs.PACKAGED_NAME_PATH }}
+          - name: Install build compiler
+            run: /bin/sh -c "apk update && apk upgrade && apk add --no-cache curl rsync sudo util-linux && cd / && curl -so ${ARCH}-cross.tgz ${HOST}/${ARCH}-cross.tgz && tar -xf ${ARCH}-cross.tgz && rm ${ARCH}-cross.tgz && cd ${ARCH}-cross"
+            env:
+                ARCH: x86_64-linux-musl
+                HOST: http://musl.cc/
+                TEMP: /tmp
+                USER: 0
+
+          - name: Build strace
+            id: build_strace
+            run: $GITHUB_WORKSPACE/build/targets/build_strace.sh aarch64
+
+          - name: Upload artifacts
+            uses: actions/upload-artifact@v4
+            with:
+                name: ${{ steps.build_strace.outputs.PACKAGED_NAME }}
+                path: ${{ steps.build_strace.outputs.PACKAGED_NAME_PATH }}
 
     create-release:
       name: Create strace Release
       runs-on: ubuntu-latest
       needs: [build-x86, build-x86_64, build-armhf, build-aarch64]
+      permissions:
+        contents: write
       steps:
         - name: Checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v2
 
         - name: Prepare Environment
           run: mkdir /tmp/releases
 
         - name: Download Artifacts
-          uses: actions/download-artifact@v3
+          uses: actions/download-artifact@v4
           with:
             path: /tmp/releases
 
         - name: List Artifacts
           run: ls -laR /tmp/releases
 
+        - name: Fetch tags
+          run: git fetch --tags --prune --quiet
+
         - name: Tag Release
+          id: tag_release
           run: |
             set +e
-            git fetch --quiet --prune --unshallow --tags
-            if [[ $(git tag -l | grep strace-v${{ needs.build-x86.outputs.version }} | wc -l) -gt 0 ]]; then
+            if git rev-list "strace-v${{ needs.build-x86.outputs.version }}" >/dev/null;then
               echo "Tag for strace-v${{ needs.build-x86.outputs.version }} already exists. Skipping release creation."
-              echo "new_release=false" >> $GITHUB_ENV
+              echo "NEW_RELEASE=false" >> $GITHUB_OUTPUT
             else
               git tag "strace-v${{ needs.build-x86.outputs.version }}"
               git push origin "strace-v${{ needs.build-x86.outputs.version }}"
-              echo "new_release=true" >> $GITHUB_ENV
+              echo "NEW_RELEASE=true" >> $GITHUB_OUTPUT
             fi
 
         - name: Create Release
           uses: ncipollo/release-action@v1
-          if: ${{ env.new_release == 'true' }}
+          if: ${{ steps.tag_release.outputs.NEW_RELEASE == 'true' }}
           with:
             name: strace-v${{ needs.build-x86.outputs.version }}
             tag: strace-v${{ needs.build-x86.outputs.version }}

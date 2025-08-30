@@ -1,0 +1,54 @@
+name: Build Nmap for Windows (VS2022)
+
+on:
+  workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Install SVN using Chocolatey
+      run: |
+        choco install svn --yes
+
+    - name: Checkout nmap-mswin32-aux via SVN
+      run: |
+        svn checkout https://svn.nmap.org/nmap-mswin32-aux
+
+    - name: Set up Git repository
+      run: |
+        git clone https://github.com/winezer0/nmap.git nmap
+
+    - name: Check if nmap was cloned correctly
+      run: |
+        cd nmap
+        dir
+      working-directory: ${{ github.workspace }}
+
+    - name: Navigate to mswin32 directory and list files
+      run: |
+        cd nmap\mswin32
+        dir
+      working-directory: ${{ github.workspace }}
+
+    - name: Setup MSBuild (VS2022)
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Execute Build.bat using MSBuild via VS2022
+      run: |
+        Build2022.bat build Release
+      working-directory: ${{ github.workspace }}\nmap\mswin32
+      shell: cmd
+
+    - name: Copy Files
+      run: |
+        CopyFile.bat
+      working-directory: ${{ github.workspace }}\nmap\mswin32
+      shell: cmd
+
+    - name: Archive the Release output
+      uses: actions/upload-artifact@v4
+      with:
+        name: nmap-release-output
+        path: ${{ github.workspace }}\nmap\mswin32\Release
