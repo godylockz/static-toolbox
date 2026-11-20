@@ -11,6 +11,7 @@ ROOT_DIRECTORY=${GITHUB_WORKSPACE:-$(cd -- "$(dirname -- "$0")/../.." && pwd)}
 source "${ROOT_DIRECTORY}/build/lib.sh"
 init_lib "$1"
 
+install_host_toolchain
 prepare_archive "strace-${STRACE_VERSION}" "$STRACE_SOURCE_URL" \
     "$STRACE_SOURCE_SHA256" "strace-${STRACE_VERSION}.tar.xz"
 
@@ -19,6 +20,9 @@ build_dir="${BUILD_DIRECTORY}/strace-build-${CURRENT_ARCH}"
 mkdir -p "$build_dir"
 pushd "$build_dir" >/dev/null
 CC=gcc \
+CC_FOR_BUILD="$HOST_CC" \
+CPP_FOR_BUILD="$HOST_CC -E" \
+CXX_FOR_BUILD="$HOST_CXX" \
 CFLAGS="$GCC_OPTS" \
 LDFLAGS="-static -pthread" \
 "${source_dir}/configure" \

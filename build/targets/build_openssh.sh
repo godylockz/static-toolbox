@@ -17,12 +17,13 @@ prepare_archive "openssh-${OPENSSH_VERSION}" "$OPENSSH_SOURCE_URL" \
     "$OPENSSH_SOURCE_SHA256" "openssh-${OPENSSH_VERSION}.tar.gz"
 
 source_dir="${SOURCE_DIRECTORY}/openssh-${OPENSSH_VERSION}"
+atomic_archive=$(get_static_atomic_archive)
 pushd "$source_dir" >/dev/null
 CC=gcc \
 CFLAGS="$GCC_OPTS -I${OPENSSL_PREFIX}/include -I${ZLIB_PREFIX}/include" \
 CPPFLAGS="-I${OPENSSL_PREFIX}/include -I${ZLIB_PREFIX}/include" \
 LDFLAGS="-static -L${OPENSSL_PREFIX}/lib -L${ZLIB_PREFIX}/lib" \
-LIBS="-lz -lssl -lcrypto" \
+LIBS="-lz -lssl -lcrypto ${atomic_archive}" \
 ./configure \
     --build=x86_64-linux-musl \
     --host="$(get_host_triple)" \

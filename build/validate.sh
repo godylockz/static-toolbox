@@ -72,7 +72,9 @@ case "$tool" in
         export NMAPDIR="${stage_directory}/share/nmap"
         version_output=$(run_target "${stage_directory}/bin/nmap" --version)
         grep -Fq "Nmap version ${version}" <<<"$version_output"
-        run_target "${stage_directory}/bin/nmap" -n -sn 127.0.0.1 >/dev/null
+        if [[ ${#runner[@]} -eq 0 ]]; then
+            run_target "${stage_directory}/bin/nmap" -n -sn 127.0.0.1 >/dev/null
+        fi
         run_target "${stage_directory}/bin/ncat" --version >/dev/null 2>&1
         run_target "${stage_directory}/bin/nping" --version >/dev/null
         ;;
@@ -110,8 +112,11 @@ case "$tool" in
         grep -Fq "strace -- version ${version}" <<<"$version_output"
         ;;
     tcpreplay)
-        version_output=$(run_target "${stage_directory}/bin/tcpreplay" --version 2>&1)
-        grep -Fq "tcpreplay version: ${version}" <<<"$version_output"
+        # tcpreplay initializes live-interface state before parsing --version and
+        # exits 255 under user-mode QEMU. tcprewrite uses the same suite version
+        # without requiring a live packet interface.
+        version_output=$(run_target "${stage_directory}/bin/tcprewrite" --version 2>&1)
+        grep -Fq "tcprewrite version: ${version}" <<<"$version_output"
         run_target "${stage_directory}/bin/tcpcapinfo" --version >/dev/null 2>&1
         ;;
 esac

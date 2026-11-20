@@ -18,14 +18,18 @@ prepare_archive "nmap-${NMAP_VERSION}" "$NMAP_SOURCE_URL" \
 
 source_dir="${SOURCE_DIRECTORY}/nmap-${NMAP_VERSION}"
 install_root="${BUILD_DIRECTORY}/nmap-install-${CURRENT_ARCH}"
+atomic_archive=$(get_static_atomic_archive)
+target_strip=$(gcc -print-prog-name=strip)
 
 pushd "$source_dir" >/dev/null
 CC=gcc \
 CXX=g++ \
+STRIP="$target_strip" \
 CFLAGS="$GCC_OPTS" \
 CXXFLAGS="$GXX_OPTS" \
 CPPFLAGS="-I${OPENSSL_PREFIX}/include -I${ZLIB_PREFIX}/include" \
 LDFLAGS="-static -L${OPENSSL_PREFIX}/lib -L${ZLIB_PREFIX}/lib" \
+LIBS="$atomic_archive" \
 PKG_CONFIG_LIBDIR="${OPENSSL_PREFIX}/lib/pkgconfig:${ZLIB_PREFIX}/lib/pkgconfig" \
 ./configure \
     --build=x86_64-linux-musl \
@@ -41,7 +45,7 @@ PKG_CONFIG_LIBDIR="${OPENSSL_PREFIX}/lib/pkgconfig:${ZLIB_PREFIX}/lib/pkgconfig"
     --with-liblua=included \
     --with-libz="$ZLIB_PREFIX"
 make -j"$JOBS"
-make install DESTDIR="$install_root"
+make install DESTDIR="$install_root" STRIP="$target_strip"
 popd >/dev/null
 
 create_stage nmap "$NMAP_VERSION"

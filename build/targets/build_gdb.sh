@@ -19,11 +19,7 @@ prepare_archive "gdb-${GDB_VERSION}" "$GDB_SOURCE_URL" \
 
 source_dir="${SOURCE_DIRECTORY}/gdb-${GDB_VERSION}"
 build_dir="${BUILD_DIRECTORY}/gdb-build-${CURRENT_ARCH}"
-atomic_archive=$(gcc -print-file-name=libatomic.a)
-if [[ ! -f "$atomic_archive" ]]; then
-    printf 'Missing static libatomic archive: %s\n' "$atomic_archive" >&2
-    exit 1
-fi
+get_static_atomic_archive >/dev/null
 if ! grep -Fq "LIBS=\"\$(gcc -print-file-name=libatomic.a) \$LIBS\"" \
     "${source_dir}/gdb/configure"; then
     patch -d "$source_dir" -p1 <"${ROOT_DIRECTORY}/patches/gdb/static-libatomic.patch"

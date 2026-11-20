@@ -163,23 +163,18 @@ strip_binary() {
     "$strip_tool" "$1"
 }
 
-install_host_toolchain() {
-    HOST_CC=gcc
-    HOST_CXX=g++
-    if [[ "$CURRENT_ARCH" == x86_64 ]]; then
-        export HOST_CC HOST_CXX
-        return
-    fi
+get_static_atomic_archive() {
+    local atomic_archive
+    atomic_archive=$(gcc -print-file-name=libatomic.a)
+    [[ -f "$atomic_archive" ]] || die "static libatomic archive not found: ${atomic_archive}"
+    printf '%s\n' "$atomic_archive"
+}
 
-    local archive="${DOWNLOAD_DIRECTORY}/x86_64-linux-musl-cross.tgz"
-    local destination="${DEPENDENCY_DIRECTORY}/host-toolchain"
-    download_file "$HOST_TOOLCHAIN_URL" "$HOST_TOOLCHAIN_SHA256" "$archive"
-    if [[ ! -d "${destination}/x86_64-linux-musl-cross" ]]; then
-        mkdir -p "$destination"
-        tar --extract --file "$archive" --directory "$destination"
-    fi
-    HOST_CC="${destination}/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc"
-    HOST_CXX="${destination}/x86_64-linux-musl-cross/bin/x86_64-linux-musl-g++"
+install_host_toolchain() {
+    HOST_CC=/usr/bin/x86_64-alpine-linux-musl-gcc
+    HOST_CXX=/usr/bin/x86_64-alpine-linux-musl-g++
+    [[ -x "$HOST_CC" ]] || die "native build compiler is not installed: ${HOST_CC}"
+    [[ -x "$HOST_CXX" ]] || die "native build compiler is not installed: ${HOST_CXX}"
     export HOST_CC HOST_CXX
 }
 
@@ -195,7 +190,8 @@ lib_build_openssl() {
     local source_dir="${SOURCE_DIRECTORY}/openssl-${OPENSSL_VERSION}"
     local openssl_target
     case "$CURRENT_ARCH" in
-        x86|armhf) openssl_target=linux-generic32 ;;
+        x86) openssl_target=linux-generic32 ;;
+        armhf) openssl_target=linux-armv4 ;;
         x86_64) openssl_target=linux-x86_64 ;;
         aarch64) openssl_target=linux-aarch64 ;;
     esac

@@ -15,13 +15,14 @@ lib_build_openssl
 prepare_git_source "socat-${SOCAT_VERSION}" "$SOCAT_GIT_URL" "$SOCAT_GIT_COMMIT"
 
 source_dir="${SOURCE_DIRECTORY}/socat-${SOCAT_VERSION}"
+atomic_archive=$(get_static_atomic_archive)
 pushd "$source_dir" >/dev/null
 autoconf
 CC=gcc \
 CFLAGS="$GCC_OPTS" \
 CPPFLAGS="-I${OPENSSL_PREFIX}/include -DNETDB_INTERNAL=-1" \
 LDFLAGS="-static -L${OPENSSL_PREFIX}/lib" \
-LIBS="-lssl -lcrypto -pthread" \
+LIBS="-lssl -lcrypto ${atomic_archive} -pthread" \
 ./configure \
     --build=x86_64-linux-musl \
     --host="$(get_host_triple)" \
