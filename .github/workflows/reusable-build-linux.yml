@@ -1,0 +1,164 @@
+name: Reusable Linux static build
+
+on:
+  workflow_call:
+    inputs:
+      tool:
+        required: true
+        type: string
+
+jobs:
+  metadata:
+    name: Resolve build metadata
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Read pinned version
+        id: version
+        run: |
+          set -euo pipefail
+          source build/versions.env
+          case "${{ inputs.tool }}" in
+            nmap) version=$NMAP_VERSION ;;
+            tcpdump) version=$TCPDUMP_VERSION ;;
+            openssh) version=$OPENSSH_VERSION ;;
+            socat) version=$SOCAT_VERSION ;;
+            gdb) version=$GDB_VERSION ;;
+            strace) version=$STRACE_VERSION ;;
+            tcpreplay) version=$TCPREPLAY_VERSION ;;
+            *) printf 'Unknown tool: %s\n' "${{ inputs.tool }}" >&2; exit 2 ;;
+          esac
+          printf 'version=%s\n' "$version" >>"$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ inputs.tool }} ${{ matrix.arch }}
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            image: muslcc/x86_64:i686-linux-musl@sha256:55f004eeb86babe921f65b706757ea718272ccc4e2eff4cd963ebe50ad2ed638
+          - arch: x86_64
+            image: muslcc/x86_64:x86_64-linux-musl@sha256:173c042a23a544defa3364d4472b30b36af1d827a74cd8dab7683b8500004334
+          - arch: armhf
+            image: muslcc/x86_64:arm-linux-musleabihf@sha256:2abb44c0efdb11599b9d5d41474c6284e9bccd39a61e9d54427693280abe3bce
+          - arch: aarch64
+            image: muslcc/x86_64:aarch64-linux-musl@sha256:2d106ab72b2b5ea5ac7696a6b3d7c5f4f98d24f99230fb784d991c453034c017
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build, validate, and package
+        id: package
+        env:
+          ARCHITECTURE: ${{ matrix.arch }}
+          TOOL: ${{ inputs.tool }}
+          TOOLCHAIN_IMAGE: ${{ matrix.image }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          build_directory="$RUNNER_TEMP/static-build"
+          output_directory="$RUNNER_TEMP/static-output"
+          package_directory="$RUNNER_TEMP/static-packages"
+          mkdir -p "$build_directory" "$output_directory" "$package_directory"
+
+          docker run --rm \
+            -e ARCHITECTURE \
+            -e GITHUB_SHA \
+            -e GITHUB_WORKSPACE=/workspace \
+            -e TOOL \
+            -e TOOLCHAIN_IMAGE \
+            -e VERSION \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$build_directory:/build" \
+            -v "$output_directory:/output" \
+            -v "$package_directory:/packaged" \
+            -w /workspace \
+            "$TOOLCHAIN_IMAGE" \
+            sh -lc '
+              set -eu
+              sh build/01_init.sh
+              bash "build/targets/build_${TOOL}.sh" "$ARCHITECTURE"
+              stage_directory="/output/${TOOL}-${VERSION}-linux-${ARCHITECTURE}"
+              bash build/validate.sh "$TOOL" "$VERSION" "$ARCHITECTURE" "$stage_directory"
+              bash build/package.sh "$TOOL" "$VERSION" "$ARCHITECTURE" "$stage_directory"
+            '
+
+          {
+            printf 'ARTIFACT_NAME=%s\n' "${TOOL}-${VERSION}-linux-${ARCHITECTURE}-static"
+            printf 'ARTIFACT_PATH=%s\n' "$package_directory"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.package.outputs.ARTIFACT_NAME }}
+          path: ${{ steps.package.outputs.ARTIFACT_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Release ${{ inputs.tool }} ${{ needs.metadata.outputs.version }}
+    needs: [metadata, build]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tags
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/releases
+
+      - name: Verify checksums
+        working-directory: ${{ runner.temp }}/releases
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          checksum_files=(**/*.sha256)
+          [[ ${#checksum_files[@]} -eq 4 ]]
+          for checksum_file in "${checksum_files[@]}"; do
+            (cd "$(dirname -- "$checksum_file")" && sha256sum --check "$(basename -- "$checksum_file")")
+          done
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/releases
+          RELEASE_TAG: ${{ inputs.tool }}-v${{ needs.metadata.outputs.version }}
+          RELEASE_TITLE: ${{ inputs.tool }} v${{ needs.metadata.outputs.version }} Linux static builds
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          release_files=("${RELEASE_DIRECTORY}"/**/*.tar.gz "${RELEASE_DIRECTORY}"/**/*.sha256)
+          [[ ${#release_files[@]} -eq 8 ]]
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${release_files[@]}" --clobber
+          elif git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            gh release create "$RELEASE_TAG" "${release_files[@]}" \
+              --verify-tag \
+              --title "$RELEASE_TITLE" \
+              --notes "Pinned, musl-linked Linux builds for x86, x86_64, armhf, and aarch64. SHA-256 files are attached."
+          else
+            gh release create "$RELEASE_TAG" "${release_files[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TITLE" \
+              --notes "Pinned, musl-linked Linux builds for x86, x86_64, armhf, and aarch64. SHA-256 files are attached."
+          fi

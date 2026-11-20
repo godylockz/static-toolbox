@@ -1,57 +1,48 @@
-#!/bin/bash
-set -e
-set -x
-set -o pipefail
-if [ "$#" -ne 1 ];then
-    echo "Usage: ${0} [x86|x86_64|armhf|aarch64]"
-    echo "Example: ${0} x86_64"
-    exit 1
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    printf 'Usage: %s [x86|x86_64|armhf|aarch64]\n' "$0" >&2
+    exit 2
 fi
-source $GITHUB_WORKSPACE/build/lib.sh
+
+ROOT_DIRECTORY=${GITHUB_WORKSPACE:-$(cd -- "$(dirname -- "$0")/../.." && pwd)}
+# shellcheck source=build/lib.sh
+source "${ROOT_DIRECTORY}/build/lib.sh"
 init_lib "$1"
 
-build_autogen(){
-    fetch "http://ftp.gnu.org/gnu/autogen/rel5.16.2/autogen-5.16.2.tar.gz" "${BUILD_DIRECTORY}/autogen" http
-    cd "${BUILD_DIRECTORY}/autogen"
-    automake
-    CFLAGS="${GCC_OPTS}" \
-        CXXFLAGS="${GXX_OPTS}" \
-        CPPFLAGS="-static" \
-        LDFLAGS="-static" \
-        ./configure \
-            --host="$(get_host_triple)"
-    make -j4
-    make install
-}
+lib_build_libpcap
+prepare_archive "tcpreplay-${TCPREPLAY_VERSION}" "$TCPREPLAY_SOURCE_URL" \
+    "$TCPREPLAY_SOURCE_SHA256" "tcpreplay-${TCPREPLAY_VERSION}.tar.xz"
 
-build_tcpreplay() {
-    fetch "https://github.com/appneta/tcpreplay.git" "${BUILD_DIRECTORY}/tcpdump" git
-    cd "${BUILD_DIRECTORY}/tcpreplay"
-    git clean -fdx
-    #git checkout v4.3.3
-    export LIBPCAP_PATH="${BUILD_DIRECTORY}/libpcap"
-    ./autogen.sh
-    CFLAGS="${GCC_OPTS} -I${LIBPCAP_PATH} -L${LIBPCAP_PATH}" \
-        CXXFLAGS="${GXX_OPTS}" \
-        CPPFLAGS="-static" \
-        LDFLAGS="-static" \
-        ./configure \
-            --host="$(get_host_triple)"
-    make -j4
-    strip tcpreplay
-}
+source_dir="${SOURCE_DIRECTORY}/tcpreplay-${TCPREPLAY_VERSION}"
+pushd "$source_dir" >/dev/null
+CC=gcc \
+CFLAGS="$GCC_OPTS -I${LIBPCAP_PREFIX}/include" \
+CPPFLAGS="-I${LIBPCAP_PREFIX}/include" \
+LDFLAGS="-static -L${LIBPCAP_PREFIX}/lib" \
+LIBS="${LIBPCAP_PREFIX}/lib/libpcap.a" \
+./configure \
+    --build=x86_64-linux-musl \
+    --host="$(get_host_triple)" \
+    --disable-shared \
+    --enable-static \
+    --enable-static-link \
+    --with-libpcap="$LIBPCAP_PREFIX" \
+    --with-libdnet=no
+make -j"$JOBS" \
+    AM_LDFLAGS=-all-static \
+    tcpreplay_LDFLAGS=-all-static \
+    tcpreplay_edit_LDFLAGS=-all-static \
+    tcpbridge_LDFLAGS=-all-static
+popd >/dev/null
 
-main() {
-    lib_build_libpcap
-    build_autogen
-    build_tcpreplay
-    local version
-    version=$(get_version "${BUILD_DIRECTORY}/tcpreplay/tcpreplay --version 2>&1 | head -n1 | awk '{print \$3}'")
-    cp "${BUILD_DIRECTORY}/tcpreplay/tcpreplay" "${OUTPUT_DIRECTORY}/tcpreplay"
-    echo "[+] Finished building tcpreplay ${CURRENT_ARCH}"
-
-    echo "PACKAGED_NAME=tcpreplay${version}"
-    echo "PACKAGED_NAME_PATH=${OUTPUT_DIRECTORY}/*"
-}
-
-main
+create_stage tcpreplay "$TCPREPLAY_VERSION"
+for binary in tcpreplay tcpreplay-edit tcprewrite tcpprep tcpcapinfo tcpbridge tcpliveplay; do
+    strip_binary "${source_dir}/src/${binary}"
+    cp "${source_dir}/src/${binary}" "${STAGE_DIRECTORY}/bin/${binary}"
+done
+copy_license "$source_dir" LICENSE tcpreplay-LICENSE
+copy_license "$source_dir" libopts/COPYING.gplv3 libopts-COPYING.gplv3
+copy_license "$source_dir" libopts/COPYING.lgplv3 libopts-COPYING.lgplv3
+copy_license "${SOURCE_DIRECTORY}/libpcap-${LIBPCAP_VERSION}" LICENSE libpcap-LICENSE
