@@ -19,7 +19,7 @@ prepare_archive "gdb-${GDB_VERSION}" "$GDB_SOURCE_URL" \
 
 source_dir="${SOURCE_DIRECTORY}/gdb-${GDB_VERSION}"
 build_dir="${BUILD_DIRECTORY}/gdb-build-${CURRENT_ARCH}"
-get_static_atomic_archive >/dev/null
+atomic_archive=$(get_static_atomic_archive)
 if ! grep -Fq "LIBS=\"\$(gcc -print-file-name=libatomic.a) \$LIBS\"" \
     "${source_dir}/gdb/configure"; then
     patch -d "$source_dir" -p1 <"${ROOT_DIRECTORY}/patches/gdb/static-libatomic.patch"
@@ -32,7 +32,8 @@ CC_FOR_BUILD="$HOST_CC" \
 CXX_FOR_BUILD="$HOST_CXX" \
 CFLAGS="$GCC_OPTS" \
 CXXFLAGS="$GXX_OPTS" \
-LDFLAGS=-static \
+LDFLAGS="-static -no-pie" \
+LIBS="$atomic_archive" \
 "${source_dir}/configure" \
     --build=x86_64-linux-musl \
     --host="$(get_host_triple)" \
@@ -61,10 +62,10 @@ LDFLAGS=-static \
     --enable-static \
     --disable-shared
 make -j"$JOBS" all-gdb all-gdbserver
-# GDB links through libtool, where -static selects static dependency archives but
-# does not force a static executable. Pass the compiler flag through explicitly.
+# GDB links through libtool, where -static does not force a static executable.
+# Disable default PIE because the 32-bit GMP archives contain text relocations.
 rm -f "${build_dir}/gdb/gdb"
-make -C "${build_dir}/gdb" gdb LDFLAGS=-Wc,-static
+make -C "${build_dir}/gdb" gdb LDFLAGS="-all-static -Wc,-no-pie"
 strip_binary "${build_dir}/gdb/gdb"
 strip_binary "${build_dir}/gdbserver/gdbserver"
 popd >/dev/null
