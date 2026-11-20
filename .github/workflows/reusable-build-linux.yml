@@ -41,8 +41,6 @@ jobs:
     needs: metadata
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    container:
-      image: ${{ matrix.image }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,32 +59,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Install build dependencies
-        run: sh build/01_init.sh
-
-      - name: Build
-        env:
-          TOOLCHAIN_IMAGE: ${{ matrix.image }}
-        run: bash "build/targets/build_${{ inputs.tool }}.sh" "${{ matrix.arch }}"
-
-      - name: Validate static artifacts
-        run: >-
-          bash build/validate.sh
-          "${{ inputs.tool }}"
-          "${{ needs.metadata.outputs.version }}"
-          "${{ matrix.arch }}"
-          "/output/${{ inputs.tool }}-${{ needs.metadata.outputs.version }}-linux-${{ matrix.arch }}"
-
-      - name: Package
+      - name: Build, validate, and package
         id: package
         env:
+          ARCHITECTURE: ${{ matrix.arch }}
+          TOOL: ${{ inputs.tool }}
           TOOLCHAIN_IMAGE: ${{ matrix.image }}
-        run: >-
-          bash build/package.sh
-          "${{ inputs.tool }}"
-          "${{ needs.metadata.outputs.version }}"
-          "${{ matrix.arch }}"
-          "/output/${{ inputs.tool }}-${{ needs.metadata.outputs.version }}-linux-${{ matrix.arch }}"
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          build_directory="$RUNNER_TEMP/static-build"
+          output_directory="$RUNNER_TEMP/static-output"
+          package_directory="$RUNNER_TEMP/static-packages"
+          mkdir -p "$build_directory" "$output_directory" "$package_directory"
+
+          docker run --rm \
+            -e ARCHITECTURE \
+            -e GITHUB_SHA \
+            -e GITHUB_WORKSPACE=/workspace \
+            -e TOOL \
+            -e TOOLCHAIN_IMAGE \
+            -e VERSION \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$build_directory:/build" \
+            -v "$output_directory:/output" \
+            -v "$package_directory:/packaged" \
+            -w /workspace \
+            "$TOOLCHAIN_IMAGE" \
+            sh -lc '
+              set -eu
+              sh build/01_init.sh
+              bash "build/targets/build_${TOOL}.sh" "$ARCHITECTURE"
+              stage_directory="/output/${TOOL}-${VERSION}-linux-${ARCHITECTURE}"
+              bash build/validate.sh "$TOOL" "$VERSION" "$ARCHITECTURE" "$stage_directory"
+              bash build/package.sh "$TOOL" "$VERSION" "$ARCHITECTURE" "$stage_directory"
+            '
+
+          {
+            printf 'ARTIFACT_NAME=%s\n' "${TOOL}-${VERSION}-linux-${ARCHITECTURE}-static"
+            printf 'ARTIFACT_PATH=%s\n' "$package_directory"
+          } >>"$GITHUB_OUTPUT"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
