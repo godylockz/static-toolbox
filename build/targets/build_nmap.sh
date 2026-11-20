@@ -1,74 +1,62 @@
-#!/bin/bash
-if [ -z "$GITHUB_WORKSPACE" ];then
-    echo "GITHUB_WORKSPACE environemnt variable not set!"
-    exit 1
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    printf 'Usage: %s [x86|x86_64|armhf|aarch64]\n' "$0" >&2
+    exit 2
 fi
-if [ "$#" -ne 1 ];then
-    echo "Usage: ${0} [x86|x86_64|armhf|aarch64]"
-    echo "Example: ${0} x86_64"
-    exit 1
-fi
-set -e
-set -o pipefail
-set -x
-source $GITHUB_WORKSPACE/build/lib.sh
-init_lib $1
 
-build_nmap() {
-    fetch "https://github.com/nmap/nmap.git" "${BUILD_DIRECTORY}/nmap" git
-    cd "${BUILD_DIRECTORY}/nmap"
-    git clean -fdx || true
-    # make sure we only build the static libraries
-    sed -i '/build-zlib: $(ZLIBDIR)\/Makefile/!b;n;c\\t@echo Compiling zlib; cd $(ZLIBDIR) && $(MAKE) static;' "${BUILD_DIRECTORY}/nmap/Makefile.in"
-    CC='gcc -static -fPIC' \
-        CXX='g++ -static -static-libstdc++ -fPIC' \
-        LD=ld \
-        LDFLAGS="-L/build/openssl" \
-        ./configure \
-            --host="$(get_host_triple)" \
-            --without-ndiff \
-            --without-zenmap \
-            --without-nmap-update \
-            --without-libssh2 \
-            --with-pcap=linux \
-            --with-openssl="${BUILD_DIRECTORY}/openssl"
-    sed -i -e "s/shared\: /shared\: #/" "${BUILD_DIRECTORY}/nmap/libpcap/Makefile"
-    make
-    strip nmap ncat/ncat nping/nping
-}
+ROOT_DIRECTORY=${GITHUB_WORKSPACE:-$(cd -- "$(dirname -- "$0")/../.." && pwd)}
+# shellcheck source=build/lib.sh
+source "${ROOT_DIRECTORY}/build/lib.sh"
+init_lib "$1"
 
-main() {
-    lib_build_openssl
-    build_nmap
-    if [ ! -f "${BUILD_DIRECTORY}/nmap/nmap" -o \
-         ! -f "${BUILD_DIRECTORY}/nmap/ncat/ncat" -o \
-         ! -f "${BUILD_DIRECTORY}/nmap/nping/nping" ];then
-        echo "[-] Building Nmap ${CURRENT_ARCH} failed!"
-        exit 1
-    fi
-    VERSION_CMD=$(get_version "${BUILD_DIRECTORY}/nmap/nmap --version")
-    NMAP_VERSION=$(echo "$VERSION_CMD" | grep "Nmap version" | awk '{print $3}')
-    if [ -n "$NMAP_VERSION" ];then
-        NMAP_VERSION="-${NMAP_VERSION}"
-    fi
-    cp "${BUILD_DIRECTORY}/nmap/nmap" "${OUTPUT_DIRECTORY}/nmap${NMAP_VERSION}"
-    cp "${BUILD_DIRECTORY}/nmap/ncat/ncat" "${OUTPUT_DIRECTORY}/ncat${NMAP_VERSION}"
-    cp "${BUILD_DIRECTORY}/nmap/nping/nping" "${OUTPUT_DIRECTORY}/nping${NMAP_VERSION}"
-    echo "[+] Finished building Nmap ${CURRENT_ARCH}"
-    NMAP_COMMIT=$(cd "${BUILD_DIRECTORY}/nmap/" && git rev-parse --short HEAD)
-    NMAP_DIR="${OUTPUT_DIRECTORY}/nmap-data${NMAP_VERSION}-${NMAP_COMMIT}"
-    if [ ! -d "$NMAP_DIR" ];then
-        echo "[-] ${NMAP_DIR} does not exist, creating it"
-        mkdir -p "${NMAP_DIR}"
-    fi
-    if [ -n "$(ls $NMAP_DIR)" ];then
-        echo "[+] Data directory is not empty"
-        exit
-    fi
-    cd "${BUILD_DIRECTORY}/nmap"
-    make install
-    cp -r /usr/local/share/nmap/* $NMAP_DIR
-    echo "[+] Copied data to Nmap data dir"
-}
+lib_build_openssl
+lib_build_zlib
+prepare_archive "nmap-${NMAP_VERSION}" "$NMAP_SOURCE_URL" \
+    "$NMAP_SOURCE_SHA256" "nmap-${NMAP_VERSION}.tar.bz2"
 
-main
+source_dir="${SOURCE_DIRECTORY}/nmap-${NMAP_VERSION}"
+install_root="${BUILD_DIRECTORY}/nmap-install-${CURRENT_ARCH}"
+
+pushd "$source_dir" >/dev/null
+CC=gcc \
+CXX=g++ \
+CFLAGS="$GCC_OPTS" \
+CXXFLAGS="$GXX_OPTS" \
+CPPFLAGS="-I${OPENSSL_PREFIX}/include -I${ZLIB_PREFIX}/include" \
+LDFLAGS="-static -L${OPENSSL_PREFIX}/lib -L${ZLIB_PREFIX}/lib" \
+PKG_CONFIG_LIBDIR="${OPENSSL_PREFIX}/lib/pkgconfig:${ZLIB_PREFIX}/lib/pkgconfig" \
+./configure \
+    --build=x86_64-linux-musl \
+    --host="$(get_host_triple)" \
+    --prefix=/usr \
+    --without-zenmap \
+    --without-ndiff \
+    --without-nmap-update \
+    --with-openssl="$OPENSSL_PREFIX" \
+    --with-libpcap=included \
+    --with-libpcre=included \
+    --with-libssh2=included \
+    --with-liblua=included \
+    --with-libz="$ZLIB_PREFIX"
+make -j"$JOBS"
+make install DESTDIR="$install_root"
+popd >/dev/null
+
+create_stage nmap "$NMAP_VERSION"
+for binary in nmap ncat nping; do
+    strip_binary "${install_root}/usr/bin/${binary}"
+    cp "${install_root}/usr/bin/${binary}" "${STAGE_DIRECTORY}/bin/${binary}"
+done
+mkdir -p "${STAGE_DIRECTORY}/share"
+cp -R "${install_root}/usr/share/nmap" "${STAGE_DIRECTORY}/share/nmap"
+cp "${ROOT_DIRECTORY}/package/targets/nmap/run-nmap.sh" "$STAGE_DIRECTORY/run-nmap.sh"
+copy_license "$source_dir" LICENSE Nmap-LICENSE
+copy_license "$source_dir" ncat/LICENSE Ncat-LICENSE
+copy_license "$source_dir" nping/LICENSE Nping-LICENSE
+copy_license "$source_dir" libpcap/LICENSE libpcap-LICENSE
+copy_license "$source_dir" libssh2/COPYING libssh2-COPYING
+copy_license "$source_dir" libpcre/LICENCE.md PCRE2-LICENCE.md
+copy_license "${SOURCE_DIRECTORY}/zlib-${ZLIB_VERSION}" LICENSE zlib-LICENSE
+copy_license "${SOURCE_DIRECTORY}/openssl-${OPENSSL_VERSION}" LICENSE.txt OpenSSL-LICENSE.txt

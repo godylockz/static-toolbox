@@ -1,306 +1,308 @@
-#!/bin/bash
-GIT_OPENSSL="https://github.com/openssl/openssl.git"
-GIT_BINUTILS_GDB="https://github.com/bminor/binutils-gdb.git"
-GIT_READLINE="https://git.savannah.gnu.org/git/readline.git"
-GIT_NCURSES="https://github.com/mirror/ncurses.git"
-GIT_LIBPCAP="https://github.com/the-tcpdump-group/libpcap.git"
+#!/usr/bin/env bash
 
-BUILD_DIRECTORY="/build"
-OUTPUT_DIRECTORY="/output"
-GCC_OPTS="-static -fPIC"
-GXX_OPTS="-static -static-libstdc++ -fPIC"
-TMP_DIR=$(mktemp -dt building_lib.XXXXXX)
-trap "rm -rf ${TMP_DIR}" EXIT TERM
+LIB_DIRECTORY=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=build/versions.env
+source "${LIB_DIRECTORY}/versions.env"
 
-# The init function that has to
-# be called before running any
-# other function. Should be used
-# to configure the building env.
-init_lib(){
-    CURRENT_ARCH="$1"
-    if [ ! -d "$BUILD_DIRECTORY" ];then
-        mkdir -p $BUILD_DIRECTORY
-    fi
-    if [ ! -d "$OUTPUT_DIRECTORY" ];then
-        mkdir -p $OUTPUT_DIRECTORY
-    fi
+BUILD_DIRECTORY=${BUILD_DIRECTORY:-/build}
+OUTPUT_DIRECTORY=${OUTPUT_DIRECTORY:-/output}
+DOWNLOAD_DIRECTORY=${DOWNLOAD_DIRECTORY:-${BUILD_DIRECTORY}/downloads}
+SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-${BUILD_DIRECTORY}/sources}
+DEPENDENCY_DIRECTORY=${DEPENDENCY_DIRECTORY:-${BUILD_DIRECTORY}/dependencies}
+JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')}
+
+GCC_OPTS=${GCC_OPTS:--O2 -static -fPIC}
+GXX_OPTS=${GXX_OPTS:--O2 -static -static-libstdc++ -fPIC}
+
+die() {
+    printf 'error: %s\n' "$*" >&2
+    exit 1
 }
 
-# Set a HTTP proxy for fetching
-# software via HTTP and Git.
-set_http_proxy(){
-    proxy=$1
-    export http_proxy="$proxy"
-    export https_proxy="$proxy"
-    git config --global http.proxy "$proxy"
+init_lib() {
+    if [[ $# -ne 1 ]]; then
+        die "init_lib requires an architecture"
+    fi
+
+    CURRENT_ARCH=$1
+    case "$CURRENT_ARCH" in
+        x86|x86_64|armhf|aarch64) ;;
+        *) die "unsupported architecture: ${CURRENT_ARCH}" ;;
+    esac
+
+    mkdir -p "$BUILD_DIRECTORY" "$OUTPUT_DIRECTORY" "$DOWNLOAD_DIRECTORY" \
+        "$SOURCE_DIRECTORY" "$DEPENDENCY_DIRECTORY"
+    export CURRENT_ARCH
 }
 
-# Return a host triple for the
-# selected architecture.
-get_host_triple(){
-    local host
-    if [ "$CURRENT_ARCH" == "x86" ];then
-        host="i686-linux-musl"
-    elif [ "$CURRENT_ARCH" == "x86_64" ];then
-        host="x86_64-linux-musl"
-    elif [ "$CURRENT_ARCH" == "armhf" ];then
-        host="arm-linux-musleabihf"
-    elif [ "$CURRENT_ARCH" == "aarch64" ];then
-        host="aarch64-linux-musl"
-    elif [ "$CURRENT_ARCH" == "ppc32" ];then
-        host="powerpc-linux-musl"
-    elif [ "$CURRENT_ARCH" == "ppc64" ];then
-        host="powerpc64-linux-musl"
-    fi
-    echo $host
+get_host_triple() {
+    case "$CURRENT_ARCH" in
+        x86) printf 'i686-linux-musl\n' ;;
+        x86_64) printf 'x86_64-linux-musl\n' ;;
+        armhf) printf 'arm-linux-musleabihf\n' ;;
+        aarch64) printf 'aarch64-linux-musl\n' ;;
+        *) die "unsupported architecture: ${CURRENT_ARCH:-unset}" ;;
+    esac
 }
 
-# Fetch and extract a resource via
-# HTTP or clone a Git repository.
-fetch(){
-    if [ "$#" -ne 3 ];then
-        echo "fetch() requires a source, destination and method."
-        echo "Example: fetch http://github.com/test.git /build/test git"
-        exit 1
+tool_version() {
+    case "$1" in
+        nmap) printf '%s\n' "$NMAP_VERSION" ;;
+        tcpdump) printf '%s\n' "$TCPDUMP_VERSION" ;;
+        openssh) printf '%s\n' "$OPENSSH_VERSION" ;;
+        socat) printf '%s\n' "$SOCAT_VERSION" ;;
+        gdb) printf '%s\n' "$GDB_VERSION" ;;
+        strace) printf '%s\n' "$STRACE_VERSION" ;;
+        tcpreplay) printf '%s\n' "$TCPREPLAY_VERSION" ;;
+        *) die "unknown tool: $1" ;;
+    esac
+}
+
+download_file() {
+    if [[ $# -ne 3 ]]; then
+        die "download_file requires URL, SHA-256, and destination"
     fi
-    source=$1
-    shift
-    destination=$1
-    shift
-    method=$@
-    # TODO: check if $source is a valid URL
-    if [ -d "$destination" ] || [ -f "$destination" ];then
-        echo "Destination ${destination} already exists, skipping."
+
+    local url=$1
+    local expected_sha256=$2
+    local destination=$3
+    local temporary_file="${destination}.partial.$$"
+
+    mkdir -p "$(dirname -- "$destination")"
+    if [[ ! -f "$destination" ]]; then
+        curl --proto '=https' --tlsv1.2 --fail --location --show-error --silent \
+            --retry 3 --output "$temporary_file" "$url"
+        mv "$temporary_file" "$destination"
+    fi
+
+    printf '%s  %s\n' "$expected_sha256" "$destination" | sha256sum --check --status || \
+        die "checksum verification failed for ${destination}"
+}
+
+prepare_archive() {
+    if [[ $# -ne 4 ]]; then
+        die "prepare_archive requires name, URL, SHA-256, and archive suffix"
+    fi
+
+    local name=$1
+    local url=$2
+    local expected_sha256=$3
+    local suffix=$4
+    local archive="${DOWNLOAD_DIRECTORY}/${name}-${suffix}"
+    local destination="${SOURCE_DIRECTORY}/${name}"
+    local completion_marker="${destination}/.static-toolbox-extracted"
+
+    if [[ -f "$completion_marker" ]]; then
         return
     fi
-    if [ "${method,,}" == "http" ];then
-        cd /tmp || { echo "Could not cd to /tmp"; exit 1; }
-        headers=$(mktemp headers.XXXXXX)
-        curl -L -D "$headers" -sOJ "$source"
-        filename=$(cat "$headers" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
-        filename=$(trim "$filename")
-        extract "$filename" "$destination"
-        trap "rm -rf ${headers} /tmp/'${filename}'" EXIT TERM
-    elif [ "${method,,}" == "git" ];then
-        git clone "$source" "$destination"
-    else
-        echo "Invalid method ${method}"
-        exit 1
-    fi
+
+    download_file "$url" "$expected_sha256" "$archive"
+    mkdir -p "$destination"
+    tar --extract --file "$archive" --directory "$destination" --strip-components=1
+    touch "$completion_marker"
 }
 
-# Extract an archive to a
-# destination directory.
-extract(){
-    if [ "$#" -ne 2 ];then
-        echo "extract() requires a source and destination."
-        exit 1
+prepare_git_source() {
+    if [[ $# -ne 3 ]]; then
+        die "prepare_git_source requires name, repository URL, and commit"
     fi
-    source=$1
-    destination=$2
-    if [ ! -d "$destination" ];then
+
+    local name=$1
+    local repository_url=$2
+    local expected_commit=$3
+    local destination="${SOURCE_DIRECTORY}/${name}"
+
+    if [[ -d "${destination}/.git" ]]; then
+        local existing_commit
+        existing_commit=$(git -C "$destination" rev-parse HEAD)
+        [[ "$existing_commit" == "$expected_commit" ]] || \
+            die "unexpected ${name} commit: ${existing_commit}"
+        return
+    fi
+
+    mkdir -p "$destination"
+    git -C "$destination" init --quiet
+    git -C "$destination" remote add origin "$repository_url"
+    git -C "$destination" fetch --quiet --depth=1 origin "$expected_commit"
+    git -C "$destination" checkout --quiet --detach FETCH_HEAD
+
+    local actual_commit
+    actual_commit=$(git -C "$destination" rev-parse HEAD)
+    [[ "$actual_commit" == "$expected_commit" ]] || \
+        die "commit verification failed for ${name}"
+}
+
+create_stage() {
+    if [[ $# -ne 2 ]]; then
+        die "create_stage requires tool and version"
+    fi
+
+    STAGE_DIRECTORY="${OUTPUT_DIRECTORY}/$1-$2-linux-${CURRENT_ARCH}"
+    if [[ -e "$STAGE_DIRECTORY" ]]; then
+        die "staging directory already exists: ${STAGE_DIRECTORY}"
+    fi
+    mkdir -p "${STAGE_DIRECTORY}/bin" "${STAGE_DIRECTORY}/LICENSES"
+    cp "${LIB_DIRECTORY}/versions.env" "${STAGE_DIRECTORY}/SOURCE-MANIFEST.env"
+    export STAGE_DIRECTORY
+}
+
+copy_license() {
+    if [[ $# -ne 3 ]]; then
+        die "copy_license requires source directory, source file, and output name"
+    fi
+    cp "$1/$2" "${STAGE_DIRECTORY}/LICENSES/$3"
+}
+
+strip_binary() {
+    if [[ $# -ne 1 || ! -f $1 ]]; then
+        die "cannot strip missing binary: ${1:-unset}"
+    fi
+    local strip_tool
+    strip_tool=$(gcc -print-prog-name=strip)
+    [[ -x "$strip_tool" ]] || die "target strip tool is not executable: ${strip_tool}"
+    "$strip_tool" "$1"
+}
+
+install_host_toolchain() {
+    HOST_CC=gcc
+    HOST_CXX=g++
+    if [[ "$CURRENT_ARCH" == x86_64 ]]; then
+        export HOST_CC HOST_CXX
+        return
+    fi
+
+    local archive="${DOWNLOAD_DIRECTORY}/x86_64-linux-musl-cross.tgz"
+    local destination="${DEPENDENCY_DIRECTORY}/host-toolchain"
+    download_file "$HOST_TOOLCHAIN_URL" "$HOST_TOOLCHAIN_SHA256" "$archive"
+    if [[ ! -d "${destination}/x86_64-linux-musl-cross" ]]; then
         mkdir -p "$destination"
+        tar --extract --file "$archive" --directory "$destination"
     fi
-    if [ -f "$source" ] ; then
-      case $source in
-        *.tar.bz2)   tar xjf "$source" -C "$destination" --strip-components 1  ;;  
-        *.tar.gz)    tar xzf "$source" -C "$destination" --strip-components 1  ;;  
-        *.tar.xz)    tar xvfJ "$source" -C "$destination" --strip-components 1 ;;  
-        *.tar)       tar xf "$source" -C "$destination" --strip-components 1   ;;  
-        *.tbz2)      tar xjf "$source" -C "$destination" --strip-components 1  ;;  
-        *.tgz)       tar xzf "$source" -C "$destination" --strip-components 1  ;;  
-        *)     echo "'${source}' cannot be extracted via extract()" ;;
-         esac
-     else
-         echo "'${source}' is not a valid file"
-     fi  
+    HOST_CC="${destination}/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc"
+    HOST_CXX="${destination}/x86_64-linux-musl-cross/bin/x86_64-linux-musl-g++"
+    export HOST_CC HOST_CXX
 }
 
-# Remove leading and
-# trailing whitespaces.
-trim(){
-    local var="$*"
-    var="${var#"${var%%[![:space:]]*}"}"
-    var="${var%"${var##*[![:space:]]}"}"   
-    echo -n "$var"
-}
-
-# Determine the version of
-# a binary after building.
-get_version(){
-    local cmd="$1"
-    if [ -z "$cmd" ];then
-        echo "Please provide a command to determine the version" >&2
-        echo "Example: /build/test --version | awk '{print \$2}'" >&2
-        exit 1
-    fi
-    local version="-"
-    if [ "$CURRENT_ARCH" == "armhf" ];then
-        if which qemu-arm 1>&2 2>/dev/null;then
-            cmd="qemu-arm ${cmd}"
-            version+=$(eval "$cmd")
-        else
-            echo "qemu-arm not found, skipping ARMHF version checks." >&2
-        fi
-    elif [ "$CURRENT_ARCH" == "aarch64" ];then
-        if which qemu-aarch64 1>&2 2>/dev/null;then
-            cmd="qemu-aarch64 ${cmd}"
-            version+=$(eval "$cmd")
-        else
-            echo "qemu-aarch64 not found, skipping AARCH64 version checks." >&2
-        fi
-    elif [ "$CURRENT_ARCH" == "ppc32" ];then
-        if which qemu-ppc 1>&2 2>/dev/null;then
-            cmd="qemu-ppc ${cmd}"
-            version+=$(eval "$cmd")
-        else
-            echo "qemu-ppc not found, skipping ppc32 version checks." >&2
-        fi
-    elif [ "$CURRENT_ARCH" == "ppc64" ];then
-        if which qemu-ppc64 1>&2 2>/dev/null;then
-            cmd="qemu-ppc64 ${cmd}"
-            version+=$(eval "$cmd")
-        else
-            echo "qemu-ppc64 not found, skipping ppc64 version checks." >&2
-        fi
-    else
-        version+=$(eval "$cmd")
-    fi
-    if [ "$version" == "-" ];then
-        version+="${CURRENT_ARCH}"
-    else
-        version+="-${CURRENT_ARCH}"
-    fi
-    echo "$version"
-}
-
-lib_create_tmp_dir(){
-    local tmp_dir=$(mktemp -dt -p ${TMP_DIR} tmpdir.XXXXXX)
-    echo "$tmp_dir"
-}
-
-lib_check_lib_arch(){
-    lib=$1
-    if [ ! -f "$lib" ];then
-        echo ""
+lib_build_openssl() {
+    OPENSSL_PREFIX="${DEPENDENCY_DIRECTORY}/openssl-${CURRENT_ARCH}"
+    if [[ -f "${OPENSSL_PREFIX}/lib/libssl.a" ]]; then
+        export OPENSSL_PREFIX
         return
     fi
-    local tmp_dir=$(lib_create_tmp_dir)
-    cp "$lib" "$tmp_dir"
-    bash -c "cd ${tmp_dir}; ar x $(basename ${lib})"
-    local output=$(find "${tmp_dir}" -name "*.o" -exec file {} \;)
-    if echo "$output" | grep -q "Intel 80386";then
-        echo "Arch of ${lib} is x86" >&2
-        echo "x86"
-    elif echo "$output" | grep -q "x86-64";then
-        echo "Arch of ${lib} is x86_64" >&2
-        echo "x86_64"
-    elif echo "$output" | grep -q "ARM aarch64";then
-        echo "Arch of ${lib} is armhf" >&2
-        echo "armhf"
-    elif echo "$output" | grep -q "ARM,";then
-        echo "Arch of ${lib} is aarch64" >&2
-        echo "aarch64"
-    else
-        echo "Could not determine arch of library ${lib}" >&2
-        echo ""
-    fi
+
+    prepare_archive "openssl-${OPENSSL_VERSION}" "$OPENSSL_SOURCE_URL" \
+        "$OPENSSL_SOURCE_SHA256" "openssl-${OPENSSL_VERSION}.tar.gz"
+    local source_dir="${SOURCE_DIRECTORY}/openssl-${OPENSSL_VERSION}"
+    local openssl_target
+    case "$CURRENT_ARCH" in
+        x86|armhf) openssl_target=linux-generic32 ;;
+        x86_64) openssl_target=linux-x86_64 ;;
+        aarch64) openssl_target=linux-aarch64 ;;
+    esac
+
+    pushd "$source_dir" >/dev/null || return
+    CC=gcc CFLAGS="$GCC_OPTS" ./Configure "$openssl_target" no-shared no-tests \
+        --prefix="$OPENSSL_PREFIX" --openssldir=/etc/ssl --libdir=lib
+    make -j"$JOBS" build_libs
+    make install_dev
+    popd >/dev/null || return
+    export OPENSSL_PREFIX
 }
 
-lib_build_openssl(){
-    local version=$1
-    fetch "$GIT_OPENSSL" "${BUILD_DIRECTORY}/openssl" git
-    cd "${BUILD_DIRECTORY}/openssl" || { echo "Cannot cd to ${BUILD_DIRECTORY}/openssl"; exit 1; }
-    if [ -n "$version" ];then
-        git checkout "$version" || echo "Version ${version} not found, continuing with master."
+lib_build_zlib() {
+    ZLIB_PREFIX="${DEPENDENCY_DIRECTORY}/zlib-${CURRENT_ARCH}"
+    if [[ -f "${ZLIB_PREFIX}/lib/libz.a" ]]; then
+        export ZLIB_PREFIX
+        return
     fi
-    if [ -f "${BUILD_DIRECTORY}/openssl/libssl.a" ];then
-        lib_arch=$(lib_check_lib_arch "${BUILD_DIRECTORY}/openssl/libssl.a")
-        if [ "$lib_arch" != "$CURRENT_ARCH" ];then
-            echo "Rebuild for current arch"
-            git clean -fdx || true
-        else
-            echo "[+] OpenSSL already available for current arch, skipping building"
-            return
-        fi
-    fi
-    local openssl_arch
-    if [ "${CURRENT_ARCH}" == "x86" ] ||
-        [ "${CURRENT_ARCH}" == "armhf" ];then
-        openssl_arch="linux-generic32"
-    elif [ "${CURRENT_ARCH}" == "x86_64" ];then
-        openssl_arch="linux-x86_64"
-    elif [ "${CURRENT_ARCH}" == "aarch64" ];then
-        openssl_arch="linux-generic64"
-    elif [ "${CURRENT_ARCH}" == "ppc32" ];then
-        openssl_arch="linux-ppc"
-    elif [ "${CURRENT_ARCH}" == "ppc64" ];then
-        openssl_arch="linux-ppc"
-    fi
-    CFLAGS="${GCC_OPTS}" \
-        ./Configure \
-            no-shared \
-            "$openssl_arch"
-    make -j4
-    echo "[+] Finished building OpenSSL ${CURRENT_ARCH}"
+
+    prepare_archive "zlib-${ZLIB_VERSION}" "$ZLIB_SOURCE_URL" \
+        "$ZLIB_SOURCE_SHA256" "zlib-${ZLIB_VERSION}.tar.gz"
+    local source_dir="${SOURCE_DIRECTORY}/zlib-${ZLIB_VERSION}"
+    pushd "$source_dir" >/dev/null || return
+    CC=gcc CFLAGS="$GCC_OPTS" ./configure --static --prefix="$ZLIB_PREFIX"
+    make -j"$JOBS"
+    make install
+    popd >/dev/null || return
+    export ZLIB_PREFIX
 }
 
-lib_build_zlib(){
-    fetch "$GIT_BINUTILS_GDB" "${BUILD_DIRECTORY}/binutils-gdb" git
-    cd "${BUILD_DIRECTORY}/binutils-gdb/zlib" || { echo "Cannot cd to ${BUILD_DIRECTORY}/binutils-gdb/zlib"; exit 1; }
-    git clean -fdx
-    CC="gcc ${GCC_OPTS}" \
-        CXX="g++ ${GXX_OPTS}" \
-        /bin/bash ./configure \
-            --host="$(get_host_triple)" \
-            --enable-static
-    make -j4
-    echo "[+] Finished building zlib ${CURRENT_ARCH}"
-}
-
-lib_build_readline(){
-    fetch "$GIT_READLINE" "${BUILD_DIRECTORY}/readline" git
-    cd "${BUILD_DIRECTORY}/readline" || { echo "Cannot cd to ${BUILD_DIRECTORY}/readline"; exit 1; }
-    git clean -fdx
-    CFLAGS="${GCC_OPTS}" \
-        CXXFLAGS="${GXX_OPTS}" \
-        ./configure \
-            --host="$(get_host_triple)" \
-            --disable-shared \
-            --enable-static
-    make -j4
-    echo "[+] Finished building readline ${CURRENT_ARCH}"
-}
-
-lib_build_ncurses(){
-    fetch "$GIT_NCURSES" "${BUILD_DIRECTORY}/ncurses" git
-    cd "${BUILD_DIRECTORY}/ncurses" || { echo "Cannot cd to ${BUILD_DIRECTORY}/ncurses"; exit 1; }
-    git clean -fdx
-    #git checkout v6_2
-
-    CMD="CFLAGS=\"${GCC_OPTS}\" "
-    CMD+="CXXFLAGS=\"${GXX_OPTS}\" "
-    CMD+="./configure --host=$(get_host_triple) --disable-shared --enable-static"
-    if [ "$CURRENT_ARCH"!="x86" -a "$CURRENT_ARCH"!="x86_64" ];then
-        CMD+=" --with-build-cc=/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc"
+lib_build_libpcap() {
+    LIBPCAP_PREFIX="${DEPENDENCY_DIRECTORY}/libpcap-${CURRENT_ARCH}"
+    if [[ -f "${LIBPCAP_PREFIX}/lib/libpcap.a" ]]; then
+        export LIBPCAP_PREFIX
+        return
     fi
-    eval "$CMD"
-    make -j4
-    echo "[+] Finished building ncurses ${CURRENT_ARCH}"
+
+    prepare_archive "libpcap-${LIBPCAP_VERSION}" "$LIBPCAP_SOURCE_URL" \
+        "$LIBPCAP_SOURCE_SHA256" "libpcap-${LIBPCAP_VERSION}.tar.xz"
+    local source_dir="${SOURCE_DIRECTORY}/libpcap-${LIBPCAP_VERSION}"
+    pushd "$source_dir" >/dev/null || return
+    CC=gcc CFLAGS="$GCC_OPTS" LDFLAGS=-static ./configure \
+        --build=x86_64-linux-musl \
+        --host="$(get_host_triple)" \
+        --prefix="$LIBPCAP_PREFIX" \
+        --disable-shared \
+        --disable-bluetooth \
+        --disable-dbus \
+        --disable-netmap \
+        --disable-rdma \
+        --disable-usb \
+        --without-libnl
+    make -j"$JOBS"
+    make install
+    popd >/dev/null || return
+    export LIBPCAP_PREFIX
 }
 
-lib_build_libpcap(){
-    fetch "$GIT_LIBPCAP" "${BUILD_DIRECTORY}/libpcap" git
-    cd "${BUILD_DIRECTORY}/libpcap" || { echo "Cannot cd to ${BUILD_DIRECTORY}/libpcap"; exit 1; }
-    git clean -fdx
-    #git checkout libpcap-1.9.1
-    CFLAGS="${GCC_OPTS}" \
-        CXXFLAGS="${GXX_OPTS}" \
-        ./configure \
-            --host="$(get_host_triple)" \
-            --with-pcap=linux \
-            --disable-shared \
-            --enable-static
-    make -j4
-    echo "[+] Finished building libpcap ${CURRENT_ARCH}"
+lib_build_gmp() {
+    GMP_PREFIX="${DEPENDENCY_DIRECTORY}/gmp-${CURRENT_ARCH}"
+    if [[ -f "${GMP_PREFIX}/lib/libgmp.a" ]]; then
+        export GMP_PREFIX
+        return
+    fi
+
+    prepare_archive "gmp-${GMP_VERSION}" "$GMP_SOURCE_URL" \
+        "$GMP_SOURCE_SHA256" "gmp-${GMP_VERSION}.tar.xz"
+    local source_dir="${SOURCE_DIRECTORY}/gmp-${GMP_VERSION}"
+    local build_dir="${BUILD_DIRECTORY}/gmp-build-${CURRENT_ARCH}"
+    mkdir -p "$build_dir"
+    pushd "$build_dir" >/dev/null || return
+    CC=gcc CFLAGS="$GCC_OPTS" LDFLAGS=-static "$source_dir/configure" \
+        --build=x86_64-linux-musl \
+        --host="$(get_host_triple)" \
+        --prefix="$GMP_PREFIX" \
+        --disable-shared \
+        --enable-static
+    make -j"$JOBS"
+    make install
+    popd >/dev/null || return
+    export GMP_PREFIX
+}
+
+lib_build_mpfr() {
+    MPFR_PREFIX="${DEPENDENCY_DIRECTORY}/mpfr-${CURRENT_ARCH}"
+    if [[ -f "${MPFR_PREFIX}/lib/libmpfr.a" ]]; then
+        export MPFR_PREFIX
+        return
+    fi
+
+    [[ -n ${GMP_PREFIX:-} ]] || die "GMP must be built before MPFR"
+    prepare_archive "mpfr-${MPFR_VERSION}" "$MPFR_SOURCE_URL" \
+        "$MPFR_SOURCE_SHA256" "mpfr-${MPFR_VERSION}.tar.xz"
+    local source_dir="${SOURCE_DIRECTORY}/mpfr-${MPFR_VERSION}"
+    local build_dir="${BUILD_DIRECTORY}/mpfr-build-${CURRENT_ARCH}"
+    mkdir -p "$build_dir"
+    pushd "$build_dir" >/dev/null || return
+    CC=gcc CFLAGS="$GCC_OPTS" LDFLAGS=-static "$source_dir/configure" \
+        --build=x86_64-linux-musl \
+        --host="$(get_host_triple)" \
+        --prefix="$MPFR_PREFIX" \
+        --with-gmp="$GMP_PREFIX" \
+        --disable-shared \
+        --enable-static
+    make -j"$JOBS"
+    make install
+    popd >/dev/null || return
+    export MPFR_PREFIX
 }

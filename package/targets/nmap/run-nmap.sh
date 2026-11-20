@@ -1,4 +1,6 @@
-#!/bin/bash
-SOURCE="${BASH_SOURCE[0]}"
-SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-NMAPDIR="$SCRIPT_DIR/data" "$SCRIPT_DIR/nmap" $@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+export NMAPDIR="${script_dir}/share/nmap"
+exec "${script_dir}/bin/nmap" "$@"

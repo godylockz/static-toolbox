@@ -1,60 +1,83 @@
-#!/bin/bash
-if [ -z "$GITHUB_WORKSPACE" ];then
-    echo "GITHUB_WORKSPACE environemnt variable not set!"
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    printf 'Usage: %s [x86|x86_64|armhf|aarch64]\n' "$0" >&2
+    exit 2
+fi
+
+ROOT_DIRECTORY=${GITHUB_WORKSPACE:-$(cd -- "$(dirname -- "$0")/../.." && pwd)}
+# shellcheck source=build/lib.sh
+source "${ROOT_DIRECTORY}/build/lib.sh"
+init_lib "$1"
+
+install_host_toolchain
+lib_build_gmp
+lib_build_mpfr
+prepare_archive "gdb-${GDB_VERSION}" "$GDB_SOURCE_URL" \
+    "$GDB_SOURCE_SHA256" "gdb-${GDB_VERSION}.tar.xz"
+
+source_dir="${SOURCE_DIRECTORY}/gdb-${GDB_VERSION}"
+build_dir="${BUILD_DIRECTORY}/gdb-build-${CURRENT_ARCH}"
+atomic_archive=$(gcc -print-file-name=libatomic.a)
+if [[ ! -f "$atomic_archive" ]]; then
+    printf 'Missing static libatomic archive: %s\n' "$atomic_archive" >&2
     exit 1
 fi
-if [ "$#" -ne 1 ];then
-    echo "Usage: ${0} [x86|x86_64|armhf|aarch64]"
-    echo "Example: ${0} x86_64"
-    exit 1
+if ! grep -Fq "LIBS=\"\$(gcc -print-file-name=libatomic.a) \$LIBS\"" \
+    "${source_dir}/gdb/configure"; then
+    patch -d "$source_dir" -p1 <"${ROOT_DIRECTORY}/patches/gdb/static-libatomic.patch"
 fi
-set -e
-set -o pipefail
-set -x
-source $GITHUB_WORKSPACE/build/lib.sh
-init_lib $1
+mkdir -p "$build_dir"
+pushd "$build_dir" >/dev/null
+CC=gcc \
+CXX=g++ \
+CC_FOR_BUILD="$HOST_CC" \
+CXX_FOR_BUILD="$HOST_CXX" \
+CFLAGS="$GCC_OPTS" \
+CXXFLAGS="$GXX_OPTS" \
+LDFLAGS=-static \
+"${source_dir}/configure" \
+    --build=x86_64-linux-musl \
+    --host="$(get_host_triple)" \
+    --target="$(get_host_triple)" \
+    --with-gmp="$GMP_PREFIX" \
+    --with-mpfr="$MPFR_PREFIX" \
+    --with-python=no \
+    --with-guile=no \
+    --with-expat=no \
+    --with-lzma=no \
+    --with-debuginfod=no \
+    --with-xxhash=no \
+    --disable-binutils \
+    --disable-gas \
+    --disable-gold \
+    --disable-gprof \
+    --disable-ld \
+    --disable-nls \
+    --disable-sim \
+    --disable-source-highlight \
+    --disable-tui \
+    --disable-werror \
+    --disable-inprocess-agent \
+    --enable-gdb \
+    --enable-gdbserver \
+    --enable-static \
+    --disable-shared
+make -j"$JOBS" all-gdb all-gdbserver
+# GDB links through libtool, where -static selects static dependency archives but
+# does not force a static executable. Pass the compiler flag through explicitly.
+rm -f "${build_dir}/gdb/gdb"
+make -C "${build_dir}/gdb" gdb LDFLAGS=-Wc,-static
+strip_binary "${build_dir}/gdb/gdb"
+strip_binary "${build_dir}/gdbserver/gdbserver"
+popd >/dev/null
 
-build_gdb() {
-    fetch "$GIT_BINUTILS_GDB" "${BUILD_DIRECTORY}/binutils-gdb" git
-    cd "${BUILD_DIRECTORY}/binutils-gdb/" || { echo "Cannot cd to ${BUILD_DIRECTORY}/binutils-gdb/"; exit 1; }
-    git clean -fdx
-    git checkout gdb-12.1-release
-
-    CMD="CFLAGS=\"${GCC_OPTS}\" "
-    CMD+="CXXFLAGS=\"${GXX_OPTS}\" "
-    CMD+="LDFLAGS=\"-static\" "
-    if [ "$CURRENT_ARCH" != "x86_64" ];then
-        CMD+="CC_FOR_BUILD=\"/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc\" "
-        CMD+="CPP_FOR_BUILD=\"/x86_64-linux-musl-cross/bin/x86_64-linux-musl-g++\" "
-    fi
-    CMD+="${BUILD_DIRECTORY}/binutils-gdb/configure --build=x86_64-linux-musl --host=$(get_host_triple) "
-    CMD+="--disable-shared --enable-static --enable-gdbserver --disable-nls --disable-inprocess-agent"
-
-    mkdir -p "${BUILD_DIRECTORY}/gdb_build"
-    cd "${BUILD_DIRECTORY}/gdb_build/"
-    eval "$CMD"
-    make -j4
-    
-    strip "${BUILD_DIRECTORY}/gdb_build/gdb/gdb" "${BUILD_DIRECTORY}/gdb_build/gdbserver/gdbserver"
-}
-
-main() {
-    build_gdb
-    if [ ! -f "${BUILD_DIRECTORY}/gdb_build/gdb/gdb" ] || \
-        [ ! -f "${BUILD_DIRECTORY}/gdb_build/gdbserver/gdbserver" ];then
-        echo "[-] Building GDB ${CURRENT_ARCH} failed!"
-        exit 1
-    fi
-    GDB_VERSION=$(get_version "${BUILD_DIRECTORY}/gdb_build/gdb/gdb --version |head -n1 |awk '{print \$4}'")
-    GDBSERVER_VERSION=$(get_version "${BUILD_DIRECTORY}/gdb_build/gdbserver/gdbserver --version |head -n1 |awk '{print \$4}'")
-    version_number=$(echo "$GDB_VERSION" | cut -d"-" -f2)
-    cp "${BUILD_DIRECTORY}/gdb_build/gdb/gdb" "${OUTPUT_DIRECTORY}/gdb${GDB_VERSION}"
-    cp "${BUILD_DIRECTORY}/gdb_build/gdbserver/gdbserver" "${OUTPUT_DIRECTORY}/gdbserver${GDBSERVER_VERSION}"
-    echo "[+] Finished building GDB ${CURRENT_ARCH}"
-
-    echo "PACKAGED_NAME=gdb${GDB_VERSION}" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=/output/*" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
-}
-
-main
+create_stage gdb "$GDB_VERSION"
+cp "${build_dir}/gdb/gdb" "${STAGE_DIRECTORY}/bin/gdb"
+cp "${build_dir}/gdbserver/gdbserver" "${STAGE_DIRECTORY}/bin/gdbserver"
+copy_license "$source_dir" gdb/COPYING GDB-COPYING
+copy_license "$source_dir" COPYING3 GPL-3.0
+copy_license "${SOURCE_DIRECTORY}/gmp-${GMP_VERSION}" COPYINGv3 GMP-COPYINGv3
+copy_license "${SOURCE_DIRECTORY}/gmp-${GMP_VERSION}" COPYING.LESSERv3 GMP-COPYING.LESSERv3
+copy_license "${SOURCE_DIRECTORY}/mpfr-${MPFR_VERSION}" COPYING.LESSER MPFR-COPYING.LESSER

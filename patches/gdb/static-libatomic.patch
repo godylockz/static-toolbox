@@ -1,0 +1,5 @@
+--- a/gdb/configure
++++ b/gdb/configure
+@@ -26719 +26719 @@ _ACEOF
+-  LIBS="-latomic $LIBS"
++  LIBS="$(gcc -print-file-name=libatomic.a) $LIBS"

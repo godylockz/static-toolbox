@@ -1,6 +1,7 @@
 #!/bin/sh
-apk update
-apk add \
+set -eu
+
+apk add --no-cache \
     bash \
     git \
     perl \
@@ -13,19 +14,20 @@ apk add \
     libtool \
     qemu-arm \
     qemu-aarch64 \
-    qemu-ppc \
-    qemu-ppc64 \
     file \
+    binutils \
     texinfo \
+    tar \
     zip \
-    wget \
+    xz \
+    bzip2 \
     coreutils \
+    diffutils \
+    findutils \
     gawk \
-    gmp-dev \
-    libunistring-dev \
-    libffi-dev \
-    lttng-ust-dev \
     curl \
+    pkgconf \
+    linux-headers \
     rsync \
     util-linux \
     patch

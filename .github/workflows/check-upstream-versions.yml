@@ -1,0 +1,73 @@
+name: Check upstream versions
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - build/check_versions.sh
+      - build/versions.env
+      - .github/workflows/check-upstream-versions.yml
+  schedule:
+    - cron: "11 6 * * *"
+  push:
+    branches: [main]
+    paths:
+      - build/check_versions.sh
+      - build/versions.env
+      - .github/workflows/check-upstream-versions.yml
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Compare pinned and upstream versions
+        id: versions
+        run: |
+          set +e
+          bash build/check_versions.sh | tee "$RUNNER_TEMP/version-report.md"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ $status -gt 1 ]]; then
+            exit "$status"
+          fi
+          if [[ $status -eq 1 ]]; then
+            printf 'stale=true\n' >>"$GITHUB_OUTPUT"
+          else
+            printf 'stale=false\n' >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Update stale-version issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STALE: ${{ steps.versions.outputs.stale }}
+        run: |
+          set -euo pipefail
+          title='Static source versions are stale'
+          issue_number=$(gh issue list --state all --limit 100 --json number,title \
+            --jq 'map(select(.title == "Static source versions are stale"))[0].number // ""')
+
+          if [[ $STALE == true ]]; then
+            if [[ -z $issue_number ]]; then
+              gh issue create --title "$title" --body-file "$RUNNER_TEMP/version-report.md"
+            else
+              gh issue reopen "$issue_number" >/dev/null 2>&1 || true
+              gh issue edit "$issue_number" --body-file "$RUNNER_TEMP/version-report.md"
+            fi
+          elif [[ -n $issue_number ]]; then
+            issue_state=$(gh issue view "$issue_number" --json state --jq .state)
+            if [[ $issue_state == OPEN ]]; then
+              gh issue close "$issue_number" \
+                --comment 'All pinned versions match the latest upstream stable releases.'
+            fi
+          fi
+
+      - name: Fail when pins are stale
+        if: steps.versions.outputs.stale == 'true'
+        run: exit 1

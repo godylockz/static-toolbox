@@ -1,50 +1,39 @@
-#!/bin/bash
-if [ -z "$GITHUB_WORKSPACE" ];then
-    echo "GITHUB_WORKSPACE environemnt variable not set!"
-    exit 1
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    printf 'Usage: %s [x86|x86_64|armhf|aarch64]\n' "$0" >&2
+    exit 2
 fi
-if [ "$#" -ne 1 ];then
-    echo "Usage: ${0} [x86|x86_64|armhf|aarch64|ppc32|ppc64]"
-    echo "Example: ${0} x86_64"
-    exit 1
-fi
-set -e
-set -o pipefail
-set -x
-source $GITHUB_WORKSPACE/build/lib.sh
+
+ROOT_DIRECTORY=${GITHUB_WORKSPACE:-$(cd -- "$(dirname -- "$0")/../.." && pwd)}
+# shellcheck source=build/lib.sh
+source "${ROOT_DIRECTORY}/build/lib.sh"
 init_lib "$1"
 
-build_socat() {
-    fetch "http://repo.or.cz/socat.git" "${BUILD_DIRECTORY}/socat" git
-    cd "${BUILD_DIRECTORY}/socat"
-    git clean -fdx
-    autoconf
-    CFLAGS="${GCC_OPTS}" \
-        CXXFLAGS="${GXX_OPTS}" \
-        CPPFLAGS="-I${BUILD_DIRECTORY} -I${BUILD_DIRECTORY}/openssl/include -DNETDB_INTERNAL=-1" \
-        LDFLAGS="-L${BUILD_DIRECTORY}/readline -L${BUILD_DIRECTORY}/ncurses/lib -L${BUILD_DIRECTORY}/openssl" \
-        ./configure \
-            --host="$(get_host_triple)" \
-            --enable-openssl-method
-    make -j4
-    strip socat
-}
+lib_build_openssl
+prepare_git_source "socat-${SOCAT_VERSION}" "$SOCAT_GIT_URL" "$SOCAT_GIT_COMMIT"
 
-main() {
-    #sudo apt install yodl
-    lib_build_openssl
-    lib_build_ncurses
-    lib_build_readline
-    build_socat
-    local version
-    version=$(get_version "${BUILD_DIRECTORY}/socat/socat -V | grep 'socat version' | awk '{print \$3}'")
-    version_number=$(echo "$version" | cut -d"-" -f2)
-    cp "${BUILD_DIRECTORY}/socat/socat" "${OUTPUT_DIRECTORY}/socat${version}"
-    echo "[+] Finished building socat ${CURRENT_ARCH}"
+source_dir="${SOURCE_DIRECTORY}/socat-${SOCAT_VERSION}"
+pushd "$source_dir" >/dev/null
+autoconf
+CC=gcc \
+CFLAGS="$GCC_OPTS" \
+CPPFLAGS="-I${OPENSSL_PREFIX}/include -DNETDB_INTERNAL=-1" \
+LDFLAGS="-static -L${OPENSSL_PREFIX}/lib" \
+LIBS="-lssl -lcrypto -pthread" \
+./configure \
+    --build=x86_64-linux-musl \
+    --host="$(get_host_triple)" \
+    --disable-readline \
+    --enable-openssl-base="$OPENSSL_PREFIX" \
+    --enable-openssl-method
+make -j"$JOBS" socat
+strip_binary socat
+popd >/dev/null
 
-    echo "PACKAGED_NAME=socat${version}" >> $GITHUB_OUTPUT
-    echo "PACKAGED_NAME_PATH=${OUTPUT_DIRECTORY}/*" >> $GITHUB_OUTPUT
-    echo "PACKAGED_VERSION=${version_number}" >> $GITHUB_OUTPUT
-}
-
-main
+create_stage socat "$SOCAT_VERSION"
+cp "${source_dir}/socat" "${STAGE_DIRECTORY}/bin/socat"
+copy_license "$source_dir" COPYING socat-COPYING
+copy_license "$source_dir" COPYING.OpenSSL socat-OpenSSL-exception
+copy_license "${SOURCE_DIRECTORY}/openssl-${OPENSSL_VERSION}" LICENSE.txt OpenSSL-LICENSE.txt
