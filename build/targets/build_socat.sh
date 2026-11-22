@@ -27,7 +27,7 @@ CPPFLAGS="-I${OPENSSL_PREFIX}/include -DNETDB_INTERNAL=-1" \
 LDFLAGS="-static -L${OPENSSL_PREFIX}/lib" \
 LIBS="-lssl -lcrypto ${atomic_archive} -pthread" \
 ./configure \
-    --build=x86_64-linux-musl \
+    --build="$(get_build_triple)" \
     --host="$(get_host_triple)" \
     --disable-readline \
     --enable-openssl-base="$OPENSSL_PREFIX" \

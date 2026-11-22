@@ -23,7 +23,7 @@ CPPFLAGS="-I${LIBPCAP_PREFIX}/include" \
 LDFLAGS="-static -L${LIBPCAP_PREFIX}/lib" \
 LIBS="${LIBPCAP_PREFIX}/lib/libpcap.a" \
 ./configure \
-    --build=x86_64-linux-musl \
+    --build="$(get_build_triple)" \
     --host="$(get_host_triple)" \
     --disable-shared \
     --enable-static \

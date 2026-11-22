@@ -25,7 +25,7 @@ CPPFLAGS="-I${OPENSSL_PREFIX}/include -I${ZLIB_PREFIX}/include" \
 LDFLAGS="-static -L${OPENSSL_PREFIX}/lib -L${ZLIB_PREFIX}/lib" \
 LIBS="-lz -lssl -lcrypto ${atomic_archive}" \
 ./configure \
-    --build=x86_64-linux-musl \
+    --build="$(get_build_triple)" \
     --host="$(get_host_triple)" \
     --prefix=/usr \
     --sysconfdir=/etc/ssh \
