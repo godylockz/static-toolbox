@@ -27,7 +27,8 @@ from the [GitHub releases page](https://github.com/godylockz/static-toolbox/rele
 The Linux workflows run when their build inputs change, can be started manually,
 and run weekly to detect build-environment regressions. The shared workflow:
 
-1. builds in a musl cross-compiler container pinned by image digest;
+1. builds in a repository-owned Debian 13 container pinned by image digest, with
+   a checksum-pinned GCC 16.2.0 and musl 1.2.6 cross-toolchain;
 2. downloads source archives pinned by version and SHA-256, or checks out an exact
    source commit;
 3. checks every executable's architecture and rejects ELF interpreters or dynamic
@@ -72,13 +73,16 @@ tcpdump build can be reproduced from the repository root with:
 
 ```sh
 docker run --rm \
+  -e ARCHITECTURE=x86_64 \
   -e GITHUB_WORKSPACE=/workspace \
+  -e TOOLCHAIN_IMAGE=ghcr.io/godylockz/static-toolbox-toolchain:x86_64-20261001@sha256:37289863ab21cd6f7e3715eab9295604e1f6cca22ee02089024e5af2a5e60df2 \
+  -e TOOLCHAIN_TRIPLE=x86_64-unknown-linux-musl \
   -v "$PWD:/workspace:ro" \
   -v "$PWD/out/build:/build" \
   -v "$PWD/out/release:/output" \
   -v "$PWD/out/packages:/packaged" \
   -w /workspace \
-  muslcc/x86_64:x86_64-linux-musl@sha256:173c042a23a544defa3364d4472b30b36af1d827a74cd8dab7683b8500004334 \
+  ghcr.io/godylockz/static-toolbox-toolchain:x86_64-20261001@sha256:37289863ab21cd6f7e3715eab9295604e1f6cca22ee02089024e5af2a5e60df2 \
   sh -lc 'sh build/01_init.sh && bash build/targets/build_tcpdump.sh x86_64'
 ```
 

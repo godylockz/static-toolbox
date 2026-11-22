@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIRECTORY=$(cd -- "$(dirname -- "$0")/.." && pwd)
 # shellcheck source=build/versions.env
 source "${ROOT_DIRECTORY}/build/versions.env"
+# shellcheck source=toolchain/versions.env
+source "${ROOT_DIRECTORY}/toolchain/versions.env"
 
 curl_page() {
     curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
@@ -76,6 +78,9 @@ tcpreplay_current=$(git ls-remote --tags https://github.com/appneta/tcpreplay.gi
     'refs/tags/v*' | \
     sed -nE 's#.*refs/tags/v([0-9]+([.][0-9]+)+)(\^\{\})?$#\1#p' | \
     sort -Vu | tail -1)
+toolchain_current=$(curl_page \
+    https://api.github.com/repos/cross-tools/musl-cross/releases/latest | \
+    sed -nE 's/^[[:space:]]*"tag_name": "([^"]+)",?$/\1/p')
 
 stale=0
 printf '# Static source version check\n\n'
@@ -91,5 +96,6 @@ check_version GMP "$GMP_VERSION" "$gmp_current"
 check_version MPFR "$MPFR_VERSION" "$mpfr_current"
 check_version strace "$STRACE_VERSION" "$strace_current"
 check_version tcpreplay "$TCPREPLAY_VERSION" "$tcpreplay_current"
+check_version "musl cross-toolchain" "$TOOLCHAIN_RELEASE" "$toolchain_current"
 
 exit "$stale"
