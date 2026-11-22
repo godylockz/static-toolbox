@@ -15,6 +15,9 @@ lib_build_openssl
 prepare_git_source "socat-${SOCAT_VERSION}" "$SOCAT_GIT_URL" "$SOCAT_GIT_COMMIT"
 
 source_dir="${SOURCE_DIRECTORY}/socat-${SOCAT_VERSION}"
+if grep -Fq 'pName->d.iPAddress->data' "${source_dir}/xio-openssl.c"; then
+    patch -d "$source_dir" -p1 <"${ROOT_DIRECTORY}/patches/socat/openssl-4-opaque-asn1.patch"
+fi
 atomic_archive=$(get_static_atomic_archive)
 pushd "$source_dir" >/dev/null
 autoconf

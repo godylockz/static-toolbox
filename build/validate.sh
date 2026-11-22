@@ -101,6 +101,7 @@ case "$tool" in
     socat)
         version_output=$(run_target "${stage_directory}/bin/socat" -V 2>&1)
         grep -Fq "socat version ${version}" <<<"$version_output"
+        grep -Fq '#define WITH_OPENSSL 1' <<<"$version_output"
         ;;
     gdb)
         version_output=$(run_target "${stage_directory}/bin/gdb" --version)

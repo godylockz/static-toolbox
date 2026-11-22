@@ -93,6 +93,12 @@ jobs:
               stage_directory="/output/${TOOL}-${VERSION}-linux-${ARCHITECTURE}"
               bash build/validate.sh "$TOOL" "$VERSION" "$ARCHITECTURE" "$stage_directory"
               bash build/package.sh "$TOOL" "$VERSION" "$ARCHITECTURE" "$stage_directory"
+              archive="/packaged/${TOOL}-${VERSION}-linux-${ARCHITECTURE}-static.tar.gz"
+              packaged_stage="/build/package-validation"
+              mkdir "$packaged_stage"
+              tar --extract --gzip --file "$archive" --directory "$packaged_stage"
+              bash build/validate.sh "$TOOL" "$VERSION" "$ARCHITECTURE" \
+                "$packaged_stage/${TOOL}-${VERSION}-linux-${ARCHITECTURE}"
             '
 
           {

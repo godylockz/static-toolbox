@@ -66,7 +66,7 @@ strace_current=$(grep -Eo 'href="[0-9]+([.][0-9]+)+/' <<<"$strace_page" | \
     sed -E 's/^href="//; s#/$##' | sort -Vu | tail -1)
 
 openssl_current=$(git ls-remote --tags https://github.com/openssl/openssl.git \
-    'refs/tags/openssl-3.5.*' | \
+    'refs/tags/openssl-*' | \
     sed -nE 's#.*refs/tags/openssl-([0-9]+([.][0-9]+)+)(\^\{\})?$#\1#p' | \
     sort -Vu | tail -1)
 socat_current=$(git ls-remote --tags https://repo.or.cz/socat.git 'refs/tags/tag-*' | \
@@ -83,7 +83,7 @@ check_version Nmap "$NMAP_VERSION" "$nmap_current"
 check_version tcpdump "$TCPDUMP_VERSION" "$tcpdump_current"
 check_version libpcap "$LIBPCAP_VERSION" "$libpcap_current"
 check_version OpenSSH "$OPENSSH_VERSION" "$openssh_current"
-check_version 'OpenSSL 3.5 LTS' "$OPENSSL_VERSION" "$openssl_current"
+check_version OpenSSL "$OPENSSL_VERSION" "$openssl_current"
 check_version zlib "$ZLIB_VERSION" "$zlib_current"
 check_version socat "$SOCAT_VERSION" "$socat_current"
 check_version GDB "$GDB_VERSION" "$gdb_current"
