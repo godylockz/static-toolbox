@@ -78,9 +78,10 @@ tcpreplay_current=$(git ls-remote --tags https://github.com/appneta/tcpreplay.gi
     'refs/tags/v*' | \
     sed -nE 's#.*refs/tags/v([0-9]+([.][0-9]+)+)(\^\{\})?$#\1#p' | \
     sort -Vu | tail -1)
-toolchain_current=$(curl_page \
-    https://api.github.com/repos/cross-tools/musl-cross/releases/latest | \
-    sed -nE 's/^[[:space:]]*"tag_name": "([^"]+)",?$/\1/p')
+toolchain_current=$(git ls-remote --tags https://github.com/cross-tools/musl-cross.git \
+    'refs/tags/[0-9]*' | \
+    sed -nE 's#.*refs/tags/([0-9]+)(\^\{\})?$#\1#p' | \
+    sort -Vu | tail -1)
 
 stale=0
 printf '# Static source version check\n\n'
