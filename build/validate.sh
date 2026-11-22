@@ -28,7 +28,7 @@ case "$tool" in
 esac
 
 case "$architecture" in
-    x86) architecture_pattern='Intel 80386'; runner=() ;;
+    x86) architecture_pattern='Intel (80386|i386)'; runner=() ;;
     x86_64) architecture_pattern='x86-64'; runner=() ;;
     armhf) architecture_pattern='ARM,.*EABI5'; runner=(qemu-arm) ;;
     aarch64) architecture_pattern='ARM aarch64'; runner=(qemu-aarch64) ;;
@@ -92,6 +92,8 @@ case "$tool" in
         trap 'rm -rf "$fixture_directory"' EXIT
         run_target "${stage_directory}/bin/ssh-keygen" -q -t ed25519 -N '' \
             -f "${fixture_directory}/host_key"
+        mkdir -p /var/empty
+        chmod 0755 /var/empty
         run_target "${stage_directory}/bin/sshd" -t \
             -f /dev/null \
             -h "${fixture_directory}/host_key" \

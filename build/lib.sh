@@ -11,7 +11,7 @@ SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-${BUILD_DIRECTORY}/sources}
 DEPENDENCY_DIRECTORY=${DEPENDENCY_DIRECTORY:-${BUILD_DIRECTORY}/dependencies}
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')}
 
-GCC_OPTS=${GCC_OPTS:--O2 -static -fPIC}
+GCC_OPTS=${GCC_OPTS:--O2 -std=gnu17 -static -fPIC}
 GXX_OPTS=${GXX_OPTS:--O2 -static -static-libstdc++ -fPIC}
 
 die() {
