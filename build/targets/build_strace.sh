@@ -26,7 +26,7 @@ CXX_FOR_BUILD="$HOST_CXX" \
 CFLAGS="$GCC_OPTS" \
 LDFLAGS="-static -pthread" \
 "${source_dir}/configure" \
-    --build=x86_64-linux-musl \
+    --build="$(get_build_triple)" \
     --host="$(get_host_triple)" \
     --disable-mpers \
     --without-libdw \

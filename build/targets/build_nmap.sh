@@ -32,7 +32,7 @@ LDFLAGS="-static -L${OPENSSL_PREFIX}/lib -L${ZLIB_PREFIX}/lib" \
 LIBS="$atomic_archive" \
 PKG_CONFIG_LIBDIR="${OPENSSL_PREFIX}/lib/pkgconfig:${ZLIB_PREFIX}/lib/pkgconfig" \
 ./configure \
-    --build=x86_64-linux-musl \
+    --build="$(get_build_triple)" \
     --host="$(get_host_triple)" \
     --prefix=/usr \
     --without-zenmap \

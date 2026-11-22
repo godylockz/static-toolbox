@@ -17,7 +17,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Read pinned version
         id: version
@@ -46,18 +46,28 @@ jobs:
       matrix:
         include:
           - arch: x86
-            image: muslcc/x86_64:i686-linux-musl@sha256:55f004eeb86babe921f65b706757ea718272ccc4e2eff4cd963ebe50ad2ed638
+            image: ghcr.io/godylockz/static-toolbox-toolchain:x86-20261001@sha256:cdbe57a10501ad3deb81f5ea1dfb72af1eb789b757eb3287214a3e75e8570698
+            triple: i686-unknown-linux-musl
           - arch: x86_64
-            image: muslcc/x86_64:x86_64-linux-musl@sha256:173c042a23a544defa3364d4472b30b36af1d827a74cd8dab7683b8500004334
+            image: ghcr.io/godylockz/static-toolbox-toolchain:x86_64-20261001@sha256:37289863ab21cd6f7e3715eab9295604e1f6cca22ee02089024e5af2a5e60df2
+            triple: x86_64-unknown-linux-musl
           - arch: armhf
-            image: muslcc/x86_64:arm-linux-musleabihf@sha256:2abb44c0efdb11599b9d5d41474c6284e9bccd39a61e9d54427693280abe3bce
+            image: ghcr.io/godylockz/static-toolbox-toolchain:armhf-20261001@sha256:f2248d0232e3255d4f1341907887f0f68e8730bb2d2c068d34bac44e7b8faf82
+            triple: arm-unknown-linux-musleabihf
           - arch: aarch64
-            image: muslcc/x86_64:aarch64-linux-musl@sha256:2d106ab72b2b5ea5ac7696a6b3d7c5f4f98d24f99230fb784d991c453034c017
+            image: ghcr.io/godylockz/static-toolbox-toolchain:aarch64-20261001@sha256:36bfb56bc79093f5f285ef7a3d3ad47df951d4b4e4ad332d945932b380aa6420
+            triple: aarch64-unknown-linux-musl
     permissions:
       contents: read
+      packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - name: Build, validate, and package
         id: package
@@ -65,6 +75,7 @@ jobs:
           ARCHITECTURE: ${{ matrix.arch }}
           TOOL: ${{ inputs.tool }}
           TOOLCHAIN_IMAGE: ${{ matrix.image }}
+          TOOLCHAIN_TRIPLE: ${{ matrix.triple }}
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
@@ -79,6 +90,7 @@ jobs:
             -e GITHUB_WORKSPACE=/workspace \
             -e TOOL \
             -e TOOLCHAIN_IMAGE \
+            -e TOOLCHAIN_TRIPLE \
             -e VERSION \
             -v "$GITHUB_WORKSPACE:/workspace:ro" \
             -v "$build_directory:/build" \
@@ -123,7 +135,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout tags
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 

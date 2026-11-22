@@ -11,7 +11,7 @@ SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-${BUILD_DIRECTORY}/sources}
 DEPENDENCY_DIRECTORY=${DEPENDENCY_DIRECTORY:-${BUILD_DIRECTORY}/dependencies}
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')}
 
-GCC_OPTS=${GCC_OPTS:--O2 -static -fPIC}
+GCC_OPTS=${GCC_OPTS:--O2 -std=gnu17 -static -fPIC}
 GXX_OPTS=${GXX_OPTS:--O2 -static -static-libstdc++ -fPIC}
 
 die() {
@@ -37,12 +37,16 @@ init_lib() {
 
 get_host_triple() {
     case "$CURRENT_ARCH" in
-        x86) printf 'i686-linux-musl\n' ;;
-        x86_64) printf 'x86_64-linux-musl\n' ;;
-        armhf) printf 'arm-linux-musleabihf\n' ;;
-        aarch64) printf 'aarch64-linux-musl\n' ;;
+        x86) printf 'i686-unknown-linux-musl\n' ;;
+        x86_64) printf 'x86_64-unknown-linux-musl\n' ;;
+        armhf) printf 'arm-unknown-linux-musleabihf\n' ;;
+        aarch64) printf 'aarch64-unknown-linux-musl\n' ;;
         *) die "unsupported architecture: ${CURRENT_ARCH:-unset}" ;;
     esac
+}
+
+get_build_triple() {
+    printf 'x86_64-linux-gnu\n'
 }
 
 tool_version() {
@@ -171,8 +175,8 @@ get_static_atomic_archive() {
 }
 
 install_host_toolchain() {
-    HOST_CC=/usr/bin/x86_64-alpine-linux-musl-gcc
-    HOST_CXX=/usr/bin/x86_64-alpine-linux-musl-g++
+    HOST_CC=/usr/bin/gcc
+    HOST_CXX=/usr/bin/g++
     [[ -x "$HOST_CC" ]] || die "native build compiler is not installed: ${HOST_CC}"
     [[ -x "$HOST_CXX" ]] || die "native build compiler is not installed: ${HOST_CXX}"
     export HOST_CC HOST_CXX
@@ -235,7 +239,7 @@ lib_build_libpcap() {
     local source_dir="${SOURCE_DIRECTORY}/libpcap-${LIBPCAP_VERSION}"
     pushd "$source_dir" >/dev/null || return
     CC=gcc CFLAGS="$GCC_OPTS" LDFLAGS=-static ./configure \
-        --build=x86_64-linux-musl \
+        --build="$(get_build_triple)" \
         --host="$(get_host_triple)" \
         --prefix="$LIBPCAP_PREFIX" \
         --disable-shared \
@@ -265,7 +269,7 @@ lib_build_gmp() {
     mkdir -p "$build_dir"
     pushd "$build_dir" >/dev/null || return
     CC=gcc CFLAGS="$GCC_OPTS" LDFLAGS=-static "$source_dir/configure" \
-        --build=x86_64-linux-musl \
+        --build="$(get_build_triple)" \
         --host="$(get_host_triple)" \
         --prefix="$GMP_PREFIX" \
         --disable-shared \
@@ -291,7 +295,7 @@ lib_build_mpfr() {
     mkdir -p "$build_dir"
     pushd "$build_dir" >/dev/null || return
     CC=gcc CFLAGS="$GCC_OPTS" LDFLAGS=-static "$source_dir/configure" \
-        --build=x86_64-linux-musl \
+        --build="$(get_build_triple)" \
         --host="$(get_host_triple)" \
         --prefix="$MPFR_PREFIX" \
         --with-gmp="$GMP_PREFIX" \

@@ -35,7 +35,7 @@ CXXFLAGS="$GXX_OPTS" \
 LDFLAGS="-static -no-pie" \
 LIBS="$atomic_archive" \
 "${source_dir}/configure" \
-    --build=x86_64-linux-musl \
+    --build="$(get_build_triple)" \
     --host="$(get_host_triple)" \
     --target="$(get_host_triple)" \
     --with-gmp="$GMP_PREFIX" \

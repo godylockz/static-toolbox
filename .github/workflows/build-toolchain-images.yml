@@ -1,0 +1,86 @@
+name: Build toolchain images
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: [toolchain-*]
+    paths:
+      - toolchain/**
+      - .github/workflows/build-toolchain-images.yml
+
+jobs:
+  build:
+    name: ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x86_64, armhf, aarch64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve toolchain pins
+        id: pins
+        env:
+          ARCHITECTURE: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          source toolchain/versions.env
+          case "$ARCHITECTURE" in
+            x86)
+              triple=$TOOLCHAIN_X86_TRIPLE
+              sha256=$TOOLCHAIN_X86_SHA256
+              ;;
+            x86_64)
+              triple=$TOOLCHAIN_X86_64_TRIPLE
+              sha256=$TOOLCHAIN_X86_64_SHA256
+              ;;
+            armhf)
+              triple=$TOOLCHAIN_ARMHF_TRIPLE
+              sha256=$TOOLCHAIN_ARMHF_SHA256
+              ;;
+            aarch64)
+              triple=$TOOLCHAIN_AARCH64_TRIPLE
+              sha256=$TOOLCHAIN_AARCH64_SHA256
+              ;;
+            *) exit 2 ;;
+          esac
+          {
+            printf 'release=%s\n' "$TOOLCHAIN_RELEASE"
+            printf 'sha256=%s\n' "$sha256"
+            printf 'triple=%s\n' "$triple"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build and publish
+        env:
+          ARCHITECTURE: ${{ matrix.arch }}
+          TOOLCHAIN_RELEASE: ${{ steps.pins.outputs.release }}
+          TOOLCHAIN_SHA256: ${{ steps.pins.outputs.sha256 }}
+          TOOLCHAIN_TRIPLE: ${{ steps.pins.outputs.triple }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/static-toolbox-toolchain:${ARCHITECTURE}-${TOOLCHAIN_RELEASE}"
+          docker build \
+            --build-arg "TOOLCHAIN_RELEASE=$TOOLCHAIN_RELEASE" \
+            --build-arg "TOOLCHAIN_SHA256=$TOOLCHAIN_SHA256" \
+            --build-arg "TOOLCHAIN_TRIPLE=$TOOLCHAIN_TRIPLE" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$image" \
+            toolchain
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            anchore/grype:v0.109.0@sha256:fc348b3af991774d5ff1bb347c20398797660937eac0398b428f7475f32ff064 \
+            "$image" --only-fixed --fail-on medium
+          docker push "$image"
+          digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+          printf 'Published `%s`\n' "$digest" >>"$GITHUB_STEP_SUMMARY"
